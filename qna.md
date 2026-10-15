@@ -50,3 +50,35 @@ This living document logs architectural dilemmas, failure modes, mathematical tr
 
 ---
 
+### Q3: `IndexIVFFlat` Lifecycle & Degenerative Performance (`train` vs `add` and `nprobe = nlist`)
+
+* **Context:**
+  An engineer sets up an inverted file index with $N = 100,000$ vectors partitioned across `nlist = 100` Voronoi cells:
+  ```python
+  quantizer = faiss.IndexFlatL2(d)
+  index_ivf = faiss.IndexIVFFlat(quantizer, d, 100, faiss.METRIC_L2)
+  ```
+
+* **Questions:**
+  1. What happens if the engineer calls `index_ivf.add(xb)` **before** `index_ivf.train(xb)`? Why does `IndexFlatL2` not require training, but `IndexIVFFlat` does?
+  2. If the engineer sets `nprobe = 100` (equal to `nlist = 100`), is `index_ivf` faster or slower than `IndexFlatL2`? What does `nprobe` actually count?
+
+* **Senior-Level & Architectural Answer:**
+  1. **Lifecycle & Crash:**
+     * Calling `.add()` before `.train()` raises `RuntimeError: Error in virtual void faiss::IndexIVF::add... index is not trained`.
+     * **First-Principles Reason:** `IndexFlatL2` is an unpartitioned contiguous buffer; appending a vector requires zero routing logic. Conversely, `IndexIVFFlat` partitions space via K-Means centroids. If `.train()` has not run, centroids do not exist, so the quantizer cannot determine which inverted list (bucket) the incoming vector belongs to.
+  2. **`nprobe` Mechanics & Degenerative Latency:**
+     * **`nprobe` counts BUCKETS (Voronoi cells), NOT individual vectors.**
+     * If $N = 100,000$ and `nlist = 100`, each bucket holds $\approx 1,000$ vectors.
+       * `nprobe = 1` searches 1 bucket $\approx 1,000$ vectors (fastest, but boundary misses).
+       * `nprobe = 5` searches 5 buckets $\approx 5,000$ vectors.
+       * `nprobe = 100` opens **all 100 buckets** and scans **all 100,000 vectors**.
+     * **Why `nprobe = nlist` is SLOWER than `IndexFlatL2`:**
+       * `IndexFlatL2` scans 100,000 vectors stored in a single contiguous memory block using highly optimized, cache-friendly SIMD / AVX-512 BLAS matrix multiplication.
+       * `IndexIVFFlat` with `nprobe = nlist` must:
+         1. Compute distance to all centroids (extra compute).
+         2. Traverse 100 separate inverted lists in memory (pointer chasing / memory fragmentation).
+         3. Still compute distances to all 100,000 vectors anyway.
+       * It does **more work with worse memory locality**, defeating the entire purpose of the index.
+
+---

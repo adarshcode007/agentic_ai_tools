@@ -1,0 +1,32 @@
+Generating dataset: N=100,000 vectors, d=64, nq=100 queries...
+
+=================================================================
+PART 1: EXACT BRUTE-FORCE BASELINE (IndexFlatL2)
+=================================================================
+IndexFlatL2 Search Latency for 100 queries: 23.81 ms
+Ground Truth Recall: 100.00% (by definition)
+
+=================================================================
+PART 2: APPROXIMATE INVERTED FILE SEARCH (IndexIVFFlat)
+=================================================================
+Before training - is_trained: False
+After training  - is_trained: True (trained in 108.08 ms)
+Total vectors added to IVF index: 100000
+
+=================================================================
+PART 3: BENCHMARKING nprobe (Search Depth vs. Recall vs. Latency)
+=================================================================
+nprobe     | Latency (ms)    | Speedup      | Recall@10
+-----------------------------------------------------------------
+1          | 1.38            | 17.25       x | 10.80      %
+2          | 0.81            | 29.24       x | 17.90      %
+5          | 1.34            | 17.73       x | 31.60      %
+10         | 2.09            | 11.41       x | 47.80      %
+20         | 3.17            | 7.51        x | 65.10      %
+50         | 13.29           | 1.79        x | 90.80      %
+100        | 19.50           | 1.22        x | 100.00     %
+=================================================================
+KEY TAKEAWAYS:
+1. nprobe=1 is the fastest, but misses neighbors sitting across cell boundaries.
+2. As nprobe approaches nlist (100), recall hits ~100%, but speed advantage disappears.  
+3. In production, choose the lowest nprobe that satisfies your SLA (e.g. >=95% recall).
