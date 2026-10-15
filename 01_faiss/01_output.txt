@@ -1,0 +1,58 @@
+============================================================
+PART 1: EXACT EUCLIDEAN (L2) SEARCH - IndexFlatL2
+============================================================
+Is index trained? True
+Total vectors stored in index: 10000
+
+L2 Search Results for Query 0:
+  Rank 1: ID=4052 (Document_Chunk_4052), Distance=5.6687
+  Rank 2: ID=2698 (Document_Chunk_2698), Distance=6.0335
+  Rank 3: ID=4363 (Document_Chunk_4363), Distance=6.4498
+
+============================================================
+PART 2: EXACT COSINE SIMILARITY - IndexFlatIP
+============================================================
+Normalized vector L2 norm check: 1.000000
+Total vectors in IP index: 10000
+
+Cosine (IP) Search Results for Query 0:
+   Rank 1: ID=4052 (Document_Chunk_4052), CosineSim=0.8908
+   Rank 2: ID=2698 (Document_Chunk_2698), CosineSim=0.8757
+   Rank 3: ID=4247 (Document_Chunk_4247), CosineSim=0.8685
+
+============================================================
+Cosine (IP) Search Results for Query 0:
+   Rank 1: ID=4052 (Document_Chunk_4052), CosineSim=0.8908
+   Rank 2: ID=2698 (Document_Chunk_2698), CosineSim=0.8757
+   Rank 3: ID=4247 (Document_Chunk_4247), CosineSim=0.8685
+Cosine (IP) Search Results for Query 0:
+   Rank 1: ID=4052 (Document_Chunk_4052), CosineSim=0.8908
+   Rank 2: ID=2698 (Document_Chunk_2698), CosineSim=0.8757
+Cosine (IP) Search Results for Query 0:
+   Rank 1: ID=4052 (Document_Chunk_4052), CosineSim=0.8908
+Cosine (IP) Search Results for Query 0:
+Cosine (IP) Search Results for Query 0:
+   Rank 1: ID=4052 (Document_Chunk_4052), CosineSim=0.8908
+   Rank 2: ID=2698 (Document_Chunk_2698), CosineSim=0.8757
+   Rank 3: ID=4247 (Document_Chunk_4247), CosineSim=0.8685
+
+============================================================
+KEY METRIC COMPARISON:
+  IndexFlatL2: SMALLER is closer (0.0 = identical).
+  IndexFlatIP: LARGER is closer  (1.0 = identical direction).
+============================================================
+
+
+// top 3 distances for each query
+D_l2 = [[5.6686873 6.0335474 6.4498334]
+        [5.3891897 6.0956807 6.209712 ]
+        [6.026673  6.043677  6.2613416]
+        [5.918209  6.3090653 6.3959723]
+        [5.869504  5.945135  5.973613 ]]
+
+// top 3 nearest neighbours indices for each query
+I_l2 = [[4052 2698 4363]
+        [9731 6585 6042]
+        [7805 9766 3176]
+        [1928 1502 2728]
+        [4280 2235 5530]]

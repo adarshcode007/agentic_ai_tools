@@ -1,0 +1,7 @@
+numpy>=1.24.0,<2.0.0
+faiss-cpu>=1.7.4
+chromadb>=0.4.24
+qdrant-client>=1.8.0
+pinecone>=3.0.0
+python-dotenv>=1.0.0
+pytest>=8.0.0

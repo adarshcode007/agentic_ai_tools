@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.env
+
+context.md
+
+# Local Vector DB data directories
+chroma_db/
+qdrant_storage/
+faiss_indexes/
