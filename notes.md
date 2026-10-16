@@ -80,3 +80,57 @@ index_ivf = faiss.IndexIVFFlat(quantizer, d, nlist, faiss.METRIC_L2)
 
 > **Production Rule of Thumb:** `nprobe` is tuned at query runtime without rebuilding the index. You increase `nprobe` until your retrieval meets your accuracy SLA (e.g., 95% Recall@10).
 
+---
+
+## 5. Graph Search (`IndexHNSWFlat`) vs. Vector Compression (`IndexIVFPQ`)
+
+### Real Benchmark Comparison (From `03_output.txt` on 50,000 vectors, $d=64$):
+| Metric | `IndexFlatL2` (Brute Force) | `IndexHNSWFlat` (Graph) | `IndexIVFPQ` (Compressed) |
+| :--- | :--- | :--- | :--- |
+| **Size in RAM/Disk** | 12.21 MB (Baseline) | **25.19 MB** (2.1x larger!) | **0.85 MB** (14.4x smaller!) |
+| **Build Time** | 2.73 ms | 520.69 ms | **11,025.15 ms** (Heavy training) |
+| **Search Latency** | 9.65 ms | **1.33 ms** (7.2x faster) | 2.06 ms (4.7x faster) |
+| **Recall@10** | 100.00% | **78.00%** (tunable via `efSearch`) | 17.10% (lossy approximation) |
+
+---
+
+### Deep Dive: `IndexHNSWFlat` (Hierarchical Navigable Small World)
+* **What it is:** A multi-layer proximity graph where vectors are nodes and geometric proximity forms edges (like a multi-layer highway/skip-list).
+* **Pros:**
+  1. **Sub-millisecond Search Latency:** Traverses long-range edges at higher layers and zooms in locally on Layer 0.
+  2. **High Recall:** Reaches 95%–99% recall by tuning `efSearch` at runtime.
+  3. **No Training Step:** Ready immediately out of the box.
+  4. **Incremental Additions:** Adding new vectors after initialization is fast and seamless.
+* **Cons:**
+  1. **RAM Bloat (The Critical Bottleneck):** Every node must store $M$ bi-directional connection pointers. In our benchmark, the index size jumped from **12.21 MB to 25.19 MB** for the exact same vectors. In production with 10M vectors, this requires massive, expensive cloud RAM instances.
+
+---
+
+### Deep Dive: `IndexIVFPQ` (Inverted File + Product Quantization)
+* **What it is:** Combines Voronoi clustering (`nlist`) with **Product Quantization (PQ)**. It slices each vector into $m$ sub-vectors, maps each sub-vector to the nearest sub-centroid in a codebook of 256 centroids, and stores each slice as a single 1-byte (`uint8`) index.
+* **Pros:**
+  1. **Massive Memory Compression:** Compresses 64 floats ($256$ bytes) into **8 bytes**! Our benchmark shrank the index from **12.21 MB down to 0.85 MB** (a **14x reduction** vs Flat, **30x reduction** vs HNSW).
+  2. **Fast ADC (Asymmetric Distance Computation):** Distance between an uncompressed query and compressed database vectors is computed via fast lookup tables.
+* **Cons:**
+  1. **Lossy Compression:** Quantizing floats into discrete centroids loses fine precision (lower baseline recall; often paired with a two-stage re-ranking pipeline).
+  2. **High Build & Training Latency:** Took **11 seconds** to train K-Means across all sub-spaces.
+
+---
+
+### 💡 Why is HNSW `is_trained=True` before adding, while PQ is `is_trained=False`?
+
+#### 1. Why `IndexHNSWFlat` requires NO training (`is_trained=True`):
+* HNSW is a **self-organizing, incremental graph**.
+* It has **no global statistical model, no clusters, and no codebook** to learn upfront.
+* When you add the very first vector, it simply becomes the graph's entry point. When you add the second vector, FAISS calculates distance to the first and links them with an edge. 
+* Every node and edge is constructed dynamically on-the-fly as vectors arrive. Because there are no parameters to optimize beforehand, it is "trained" by definition at birth.
+
+#### 2. Why `IndexIVFPQ` MUST be trained (`is_trained=False`):
+* Product Quantization relies on a **Codebook** (a dictionary of 256 sub-centroids per sub-space).
+* To compress an 8-dimensional float slice into a single 1-byte number (`0` to `255`), FAISS must know:
+  > *"What are the 256 representative centroid coordinates for this specific dataset?"*
+* Those 256 centroids **cannot be guessed**—they depend entirely on the distribution of your data.
+* If you tried to add vectors without running `.train(xb)`, FAISS would have an empty codebook and no Voronoi centroids: it would be physically impossible to encode the floats into byte IDs.
+* Therefore, `IndexIVFPQ` is strictly untrained until `.train(xb)` executes K-Means to generate both the Voronoi centroids and the PQ sub-space codebooks.
+
+

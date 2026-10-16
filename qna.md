@@ -82,3 +82,33 @@ This living document logs architectural dilemmas, failure modes, mathematical tr
        * It does **more work with worse memory locality**, defeating the entire purpose of the index.
 
 ---
+
+### Q4: Hardware Sizing for HNSW & Domain Drift in Product Quantization
+
+* **Context:**
+  An engineering team must index N = 10,000,000 vectors with dimension d = 1536 (OpenAI embeddings, float32) on a single cloud server with 32 GB of RAM.
+
+* **Questions:**
+  1. What is the RAM requirement for raw vectors vs. IndexHNSWFlat(d=1536, M=32)? Will it fit in 32 GB?
+  2. If the team switches to IndexIVFPQ but trains the codebook on legal contracts while 99% of production data is Python code and medical papers, what happens to retrieval?
+
+* **Senior-Level & Architectural Answer:**
+  1. **Vector Memory Calculation & OOM Crash:**
+     * Formula:
+       Bytes per vector = d * 4 bytes (since float32 = 4 bytes)
+       Bytes per vector = 1536 * 4 = 6,144 bytes (~6 KB)
+       Total raw vector RAM = 10,000,000 * 6,144 bytes = 61.44 GB
+     * HNSW Graph Overhead:
+       HNSW stores M=32 bi-directional connection pointers per vector across multiple layers.
+       This adds ~50 to 60 GB of graph pointer structures.
+       Total HNSW RAM needed = ~110 GB to 120 GB.
+     * Runtime Consequence on 32 GB RAM Server:
+       The index cannot build. The Linux kernel OOM (Out Of Memory) Killer will terminate the Python process with exit code 137 (SIGKILL).
+  2. **Codebook Domain Drift in PQ:**
+     * Product Quantization is a dictionary-based lossy compressor. It learns 256 sub-centroids during training that model the geometric distribution of the training data.
+     * If trained on legal contracts, the codebook sub-centroids only cluster legal terminology.
+     * When Python code or medical vectors arrive, their embeddings lie in completely different regions of the 1536-dimensional space. FAISS is forced to map medical terms to the nearest legal centroid.
+     * Consequence: Catastrophic quantization distortion. Cosine similarity calculations between queries and compressed vectors become meaningless, and recall plummets to near zero.
+     * Production Rule: PQ training sets must be a statistically representative, diverse sample of production traffic. If data domains shift significantly, the PQ index must be retrained.
+
+---

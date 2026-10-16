@@ -1,0 +1,17 @@
+--- 1. IndexFlatL2 (Exact Baseline) ---
+
+
+--- 2. IndexHNSWFlat (Hierarchical Navigable Small World) ---
+HNSW is_trained before add: True
+
+--- 3. IndexIVFPQ (Voronoi Buckets + Byte Compression) ---
+IVFPQ is_trained before training: False
+
+================================================================================
+Index Type       | Size (MB)  | Build Time   | Search Latency  | Recall@10
+================================================================================
+IndexFlatL2      | 12.21      | 2.73      ms | 9.65         ms | 100.00%
+IndexHNSWFlat    | 25.19      | 520.69    ms | 1.33         ms | 78.00    %
+IndexIVFPQ       | 0.85       | 11025.15  ms | 2.06         ms | 17.10    %
+================================================================================
+
