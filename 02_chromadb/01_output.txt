@@ -1,0 +1,37 @@
+=================================================================
+PART 1: INITIALIZE PERSISTENT CHROMADB CLIENT
+=================================================================
+Collection 'security_policies' created with Cosine space.
+
+=================================================================
+PART 2: INGESTING DOCUMENTS AND METADATA
+=================================================================
+C:\Users\adars\.cache\chroma\onnx_models\all-MiniLM-L6-v2\onnx.tar.gz: 100%|█| 79.3M/79. 
+Ingested 6 documents successfully.
+
+=================================================================
+PART 3: UNFILTERED SEMANTIC SEARCH
+=================================================================
+Query: 'How do we protect user accounts and logins?'
+
+Top 2 Unfiltered Matches:
+   Rank 1: ID=doc_5 | Distance=0.6908 | Dept=security
+        Text: "Multi-factor authentication (MFA) is strictly required for all VPN and SSO logins."
+   Rank 2: ID=doc_1 | Distance=0.7298 | Dept=security
+        Text: "All employee laptops must enforce full-disk encryption via BitLocker or FileVault."
+
+=================================================================
+PART 4: FILTERED SEARCH (WHERE dept == 'finance')
+=================================================================
+Filtered Matches (Strictly department: finance):
+  Rank 1: ID=doc_6 | Distance=0.9448 | Dept=finance
+          Text: "Annual financial performance reviews are scheduled for the fourth quarter."
+  Rank 2: ID=doc_3 | Distance=1.0173 | Dept=finance
+          Text: "Travel expense reports must be submitted within 30 days of trip completion."
+
+=================================================================
+PART 5: VERIFYING DISK PERSISTENCE
+=================================================================
+Reconnected from disk. Persisted document count: 6
+Persistence verification SUCCESSFUL!
+

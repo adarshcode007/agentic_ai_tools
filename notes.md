@@ -133,4 +133,33 @@ index_ivf = faiss.IndexIVFFlat(quantizer, d, nlist, faiss.METRIC_L2)
 * If you tried to add vectors without running `.train(xb)`, FAISS would have an empty codebook and no Voronoi centroids: it would be physically impossible to encode the floats into byte IDs.
 * Therefore, `IndexIVFPQ` is strictly untrained until `.train(xb)` executes K-Means to generate both the Voronoi centroids and the PQ sub-space codebooks.
 
+---
+
+## 6. ChromaDB: Internal Mechanics, Filtering & Ingestion Rules
+
+### 1. How Filtered Search Works Under the Hood (SQLite + HNSW):
+* **Step 1 (SQL ID Lookup):** When you run a query with `where={"department": "finance"}`, Chroma first queries its backing **SQLite** database:
+  `SELECT id FROM embedding_metadata WHERE key = 'department' AND string_value = 'finance';`
+  This returns the allowed ID set (e.g. `{doc_3, doc_6}`).
+* **Step 2 (Filtered Graph Traversal):** Chroma passes this allowed set to `hnswlib`. During HNSW graph exploration, nodes outside the allowed set are filtered out before distance ranking.
+* **Why this matters:** Unlike naive post-filtering (which retrieves top-k vectors globally and then filters, often returning 0 matches), Chroma's single-stage filtering guarantees you receive valid matches if they exist.
+
+### 2. Supported Parameters in `collection.add()`:
+`collection.add()` does NOT take arbitrary keyword arguments. It accepts:
+* `ids`: `list[str]` (Mandatory unique string IDs).
+* `documents`: `list[str]` (Raw text strings to be vectorized).
+* `embeddings`: `list[list[float]]` (Precomputed vectors, if bypassing Chroma's embedder).
+* `metadatas`: `list[dict]` (Key-value pairs for filtering and payload storage).
+* `uris`: `list[str]` (File/image paths for multimodal search).
+
+> **Custom Fields:** Any custom attribute (like `notes`, `author`, `created_at`) MUST be placed inside the `metadatas` dictionary:
+> `metadatas=[{"notes": "CISO approved", "department": "security"}]`
+
+### 3. What Gets Vectorized vs. Stored Relational:
+* **ONLY the `documents` parameter is converted into vector embeddings.**
+* The fields inside **`metadatas` are NEVER vectorized**. They are stored purely as relational columns in SQLite for SQL filtering and payload inspection.
+* **Rule:** If you want `notes` or other metadata to be semantically searchable by the embedding model, you must concatenate them into the text passed to `documents` before calling `.add()`:
+  `documents=[f"Content: {text} | Notes: {notes}"]`
+
+
 

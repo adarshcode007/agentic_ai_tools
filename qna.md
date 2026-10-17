@@ -112,3 +112,85 @@ This living document logs architectural dilemmas, failure modes, mathematical tr
      * Production Rule: PQ training sets must be a statistically representative, diverse sample of production traffic. If data domains shift significantly, the PQ index must be retrained.
 
 ---
+
+### Q5: Understanding "Cosine Distance" in ChromaDB vs. Cosine Similarity in FAISS
+
+* **Context:**
+  In FAISS `IndexFlatIP`, normalized vector search returns **Cosine Similarity** (larger is closer, range: -1.0 to 1.0, where 1.0 is identical).
+  In ChromaDB with `metadata={"hnsw:space": "cosine"}`, search returns **Distances** like `0.6908` and `1.0173`.
+
+* **Questions:**
+  1. What is the mathematical relationship between Chroma's Cosine Distance and Cosine Similarity?
+  2. What does a distance greater than 1.0 (e.g. `1.0173`) mean geometrically in vector space?
+
+* **Senior-Level & Architectural Answer:**
+  1. **Mathematical Relationship:**
+     ChromaDB uses the standard metric definition:
+     `Cosine Distance = 1 - Cosine Similarity`
+     * Identical vectors (angle = 0 deg): Cosine Sim = 1.0 -> Distance = 1 - 1 = 0.0 (Closest match).
+     * Perpendicular / Orthogonal vectors (angle = 90 deg): Cosine Sim = 0.0 -> Distance = 1 - 0 = 1.0.
+     * Opposite vectors (angle = 180 deg): Cosine Sim = -1.0 -> Distance = 1 - (-1) = 2.0 (Farthest match).
+     * Rule: In Chroma, **SMALLER distance is closer** (range: 0.0 to 2.0).
+  2. **Why Distance > 1.0 Occurs:**
+     If Distance = 1.0173:
+     `Cosine Similarity = 1 - 1.0173 = -0.0173`
+     A negative similarity means the angle between the query vector and document vector is greater than 90 degrees (pointing slightly in opposite directions in semantic space).
+
+---
+
+### Q6: The Embedding Pipeline & Dimensionality Mismatch Trap in ChromaDB
+
+* **Context:**
+  An ingestion service ingests raw text without specifying an embedder:
+  ```python
+  collection.add(documents=my_docs, ids=my_ids)
+  ```
+  A search service later queries the collection using raw embeddings from OpenAI:
+  ```python
+  openai_vec = openai_client.embeddings.create(input=query, model="text-embedding-3-small").data[0].embedding
+  results = collection.query(query_embeddings=[openai_vec], n_results=5)
+  ```
+
+* **Question:**
+  What will happen at runtime when this query executes?
+
+* **Senior-Level & Architectural Answer:**
+  * **Runtime Crash (Dimensionality Mismatch):**
+    The query will immediately fail with a runtime exception (e.g., `ValueError: Dimensionality of query vector (1536) does not match index dimensionality (384)`).
+  * **Root Cause:**
+    * When `collection.add(documents=...)` is called without a custom embedding function, Chroma initializes an underlying `hnswlib` index using its default ONNX model: `all-MiniLM-L6-v2`, which has **d = 384 dimensions**.
+    * OpenAI's `text-embedding-3-small` generates vectors with **d = 1536 dimensions**.
+    * An HNSW graph index is fixed to a single dimensional space at creation; computing Euclidean or Cosine distance between vectors of unequal lengths (384 vs 1536) is mathematically impossible.
+  * **Production Fix:**
+    Always explicitly attach the embedding function directly to the collection during initialization so both ingestion and querying stay synchronized:
+    ```python
+    from chromadb.utils import embedding_functions
+    ef = embedding_functions.OpenAIEmbeddingFunction(api_key="...", model_name="text-embedding-3-small")
+    collection = client.get_or_create_collection(name="docs", embedding_function=ef)
+    ```
+
+---
+
+### Q7: ChromaDB Mutation Invariants (ID Collisions, `upsert`) & Flat Metadata Constraints
+
+* **Context:**
+  A production pipeline manages document lifecycle and metadata indexing in ChromaDB:
+  ```python
+  # Initial document
+  collection.add(ids=["policy_001"], documents=["Remote work 2 days/week."], metadatas=[{"dept": "HR"}])
+  ```
+
+* **Questions:**
+  1. If an engineer later runs `collection.add(ids=["policy_001"], documents=["Remote work 3 days/week."])`, what happens? How should idempotent updates be handled?
+  2. If an engineer attempts to store nested structures in metadata (e.g. `metadatas=[{"approvers": ["Alice", "Bob"], "location": {"city": "NYC"}}]`), what happens?
+
+* **Senior-Level & Architectural Answer:**
+  1. **ID Collision & Idempotent Upserts:**
+     * `collection.add()` strictly enforces uniqueness. If an ID already exists, Chroma raises an exception (`ValueError: DuplicateIDError / IDs already exist in collection`). It will **not** silently overwrite or duplicate.
+     * **Production Fix:** Use `collection.upsert(...)` (or `collection.update(...)` if the ID is guaranteed to exist). `collection.upsert()` is idempotent: it inserts new documents if the ID is novel, or replaces the vector, text, and metadata in place if the ID already exists.
+  2. **Flat Primitive Metadata Constraints:**
+     * ChromaDB **rejects** nested dictionaries and lists, raising `ValueError: Expected metadata value to be a str, int, float or bool`.
+     * **Why this constraint exists:** Chroma persists metadata into structured SQLite relational tables to support fast SQL `WHERE` clauses (`WHERE key = 'dept' AND string_value = 'HR'`). SQLite relational indexing is optimized for scalar primitive types, not arbitrary schemaless JSON trees.
+     * **Workaround for Complex Metadata:** Serialize nested dictionaries or lists into JSON strings (e.g. `json.dumps(["Alice", "Bob"])`) or flatten the keys (e.g. `location_city="NYC"`).
+
+---

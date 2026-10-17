@@ -6,7 +6,7 @@ Having already mastered the fundamentals **from first principles (scratch)** in 
 
 ---
 
-## 📍 Current Status: `Phase 0 (Vector DB Mastery: FAISS ✅ | ChromaDB 🟡 | Pinecone ⚪ | Qdrant ⚪)` — In Progress 🚀
+## 📍 Current Status: `Phase 0 (Vector DB Mastery: FAISS ✅ | ChromaDB ✅ | Pinecone 🟡 | Qdrant ⚪)` — In Progress 🚀
 
 ```
 [🟡 Phase 0] ──▶ [⚪ Phase 1] ──▶ [⚪ Phase 2] ──▶ [⚪ Phase 3] ──▶ [⚪ Phase 4] ──▶ [⚪ Phase 5]
@@ -27,7 +27,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 - [x] **Local Vector Search with FAISS (Facebook AI Similarity Search)**:
   - Building exact (`IndexFlatL2`, `IndexFlatIP`) vs approximate nearest neighbor indices (`IndexHNSWFlat`, `IndexIVFFlat`).
   - Understanding clustering, Voronoi cells, and quantization (Product Quantization - PQ) for memory reduction.
-- [ ] **Embedded Prototyping with ChromaDB**:
+- [x] **Embedded Prototyping with ChromaDB**:
   - Setting up Chroma collections with persistent SQLite/DuckDB backing.
   - Adding documents, custom metadata, and executing filtered vector queries (`where={"category": "finance"}`).
 - [ ] **Production Cloud Vector Store with Pinecone**:      
