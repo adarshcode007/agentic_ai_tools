@@ -1,0 +1,38 @@
+=================================================================
+PART 1: INITIALIZE PINECONE CLIENT & SERVERLESS INDEX
+=================================================================
+Existing index in project: []
+Creating Serverless Index 'agentic-rag-demo' on AWS us-east-1...
+Waiting for index provisioning to complete...
+Index 'agentic-rag-demo' is READY!
+Index host endpoint: {}
+
+=================================================================
+PART 2: UPSERTING DATA INTO ISOLATED NAMESPACES
+=================================================================
+Upserted vectors into 'tenant-hr' and 'tenant-engineering'.
+Index stats after upsert:
+   Total vector count: 4
+   Namespaces: {'tenant-engineering': NamespaceSummary(vector_count=2), 'tenant-hr': NamespaceSummary(vector_count=2)}
+
+=================================================================
+PART 3: QUERYING WITH NAMESPACE ISOLATION
+=================================================================
+Results from namespace 'tenant-hr'
+   ID: hr_01      | Score: 0.9999 | Dept: hr
+   ID: hr_02      | Score: 0.7273 | Dept: hr
+
+Results from namespace 'tenant-engineering':
+  ID: eng_01     | Score: 0.9999 | Dept: engineering
+  ID: eng_02     | Score: 0.7148 | Dept: engineering
+
+=================================================================
+PART 4: METADATA PRE-FILTERING (doc_type == 'policy')
+=================================================================
+Filtered Results in 'tenant-hr' (doc_type == 'policy'):
+   ID: hr_01      | Score: 1.0000 | Type: policy
+
+=================================================================
+PINECONE DEMO COMPLETED SUCCESSFULLY!
+=================================================================
+

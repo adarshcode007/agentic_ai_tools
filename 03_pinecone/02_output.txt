@@ -1,0 +1,25 @@
+Creating Serverless Hybrid Index 'agentic-hybrid-demo' with metric='dotproduct'...       
+Hybrid Index is READY!
+
+Upserting hybrid vectors (dense + sparse)...
+======================================================================
+BENCHMARKING ALPHA (CONVEX COMBINATION)
+======================================================================
+
+--- Mode: PURE DENSE (alpha=1.0) ---
+  Rank 1: ID=doc_semantic       | Score=0.9999
+  Rank 2: ID=doc_keyword_exact  | Score=0.7273
+
+--- Mode: PURE SPARSE (alpha=0.0) ---
+  Rank 1: ID=doc_keyword_exact  | Score=2.0000
+  Rank 2: ID=doc_semantic       | Score=1.0000
+
+--- Mode: HYBRID (alpha=0.5) ---
+  Rank 1: ID=doc_keyword_exact  | Score=1.3638
+  Rank 2: ID=doc_semantic       | Score=1.0000
+
+======================================================================
+KEY TAKEAWAY:
+At alpha=1.0, semantic meaning wins. At alpha=0.0, exact keyword 'ERR_504' wins.
+At alpha=0.5, hybrid fusion blends both signals for robust production RAG.
+======================================================================

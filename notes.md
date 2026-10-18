@@ -161,5 +161,89 @@ index_ivf = faiss.IndexIVFFlat(quantizer, d, nlist, faiss.METRIC_L2)
 * **Rule:** If you want `notes` or other metadata to be semantically searchable by the embedding model, you must concatenate them into the text passed to `documents` before calling `.add()`:
   `documents=[f"Content: {text} | Notes: {notes}"]`
 
+---
+
+## 7. Pinecone Hybrid Search: Architecture, Fusion Algorithms & Concrete Example
+
+### 1. Division of Labor: Client-Side vs. Pinecone Cloud
+
+Pinecone is strictly a **vector database and linear algebra engine**, NOT an embedding or NLP tokenizer service.
+
+```
++-----------------------------------------------------------------------------------------+
+| CLIENT SIDE (Your Python Backend Application)                                           |
+|                                                                                         |
+| 1. Dense Embedding Generation: Passes query text to OpenAI or Hugging Face               |
+|    text -> [0.12, -0.45, ...]                                                           |
+|                                                                                         |
+| 2. Sparse Token Encoding: Passes query text to BM25 or SPLADE neural model              |
+|    text -> {'indices': [102, 103], 'values': [1.0, 1.0]}                                |
+|                                                                                         |
+| 3. Convex Scaling (Applying Alpha): Multiplies dense and sparse weights                  |
+|    scaled_dense  = dense_vector  * alpha                                                |
+|    scaled_sparse = sparse_values * (1.0 - alpha)                                        |
++-----------------------------------------------------------------------------------------+
+                                            │
+                                            ▼  (Single HTTPS / gRPC request)
++-----------------------------------------------------------------------------------------+
+| PINECONE CLOUD (Under the Hood on Cloud Search Nodes)                                   |
+|                                                                                         |
+| 4. Single-Pass Weighted Dot Product Execution:                                          |
+|    Calculates the combined dot product across both dense and sparse representations     |
+|    inside the cloud hardware index in a single search traversal.                        |
++-----------------------------------------------------------------------------------------+
+```
+
+---
+
+### 2. The Hybrid Fusion Algorithm: Linear Score Fusion vs. RRF
+
+In vector search, there are two primary ways to combine dense and sparse signals:
+
+#### Approach A: Linear Score Fusion (Convex Combination — What Pinecone Uses)
+* **Algorithm:** Pinecone calculates a direct dot product on the combined vector representations:
+  `Final Score(d) = alpha * (Dense_q . Dense_d) + (1.0 - alpha) * (Sparse_q . Sparse_d)`
+* **How it works:**
+  * When `index_name` is created with `metric="dotproduct"`, Pinecone computes the dot product of both dense and sparse arrays simultaneously and sums them up.
+  * **Pros:** Blazing fast; executes on server hardware in a **single query pass**.
+  * **Requirement:** Dense vectors must be L2-normalized so dense dot products remain in the `[-1.0, 1.0]` range.
+
+#### Approach B: Reciprocal Rank Fusion (RRF — What You Built From Scratch in Phase 5)
+* **Algorithm:** `Score(d) = 1 / (60 + rank_dense) + 1 / (60 + rank_sparse)`
+* **How it works:** Executes two independent queries (one BM25, one Vector), retrieves two sorted lists of document IDs, and merges them in Python based purely on their 1st, 2nd, 3rd ranking positions.
+* **Pros:** Scale-invariant (immune to differing score ranges between BM25 and cosine).
+* **Cons:** Requires two separate roundtrip queries and manual application-memory merging.
+
+---
+
+### 3. Step-by-Step Concrete Example (From `02_hybrid_search.py`)
+
+* **Query:** `"How to resolve ERR_504 timeout"`
+* **Candidate Documents in Database:**
+  * **`doc_semantic`:** *"The distributed database experienced network latency and high gateway timeout issues."*
+    * Dense Similarity: Very high (`0.9999`)
+    * Sparse Tokens Matched: Only `"timeout"` (Sparse Count = `1.0`)
+  * **`doc_keyword_exact`:** *"Critical system failure: ERR_504 gateway timeout recorded in service logs."*
+    * Dense Similarity: Moderate (`0.7273`)
+    * Sparse Tokens Matched: Both `"err_504"` and `"timeout"` (Sparse Count = `2.0`)
+
+#### The Mathematical Results Across Alpha Settings:
+
+1. **Pure Dense (`alpha = 1.0`):**
+   * `doc_semantic` score: `1.0 * 0.9999 + 0.0 * 1.0 = 0.9999`  **--> RANK 1**
+   * `doc_keyword_exact` score: `1.0 * 0.7273 + 0.0 * 2.0 = 0.7273`
+   * *Outcome:* Pure semantic meaning wins. Exact keywords are ignored.
+
+2. **Pure Sparse (`alpha = 0.0`):**
+   * `doc_keyword_exact` score: `0.0 * 0.7273 + 1.0 * 2.0 = 2.0000`  **--> RANK 1**
+   * `doc_semantic` score: `0.0 * 0.9999 + 1.0 * 1.0 = 1.0000`
+   * *Outcome:* Exact keyword matches win. Semantic context is ignored.
+
+3. **Balanced Hybrid (`alpha = 0.5`):**
+   * `doc_keyword_exact` score: `(0.5 * 0.7273) + (0.5 * 2.0) = 0.3637 + 1.0 = 1.3638`  **--> RANK 1**
+   * `doc_semantic` score: `(0.5 * 0.9999) + (0.5 * 1.0) = 0.5000 + 0.5 = 1.0000`
+   * *Outcome:* The presence of the exact error code `"ERR_504"` combined with reasonable semantic relevance elevates the true production resolution document to #1.
+
+
 
 
