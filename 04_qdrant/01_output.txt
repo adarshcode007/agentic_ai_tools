@@ -1,0 +1,35 @@
+=================================================================
+PART 1: INITIALIZE LOCAL EMBEDDED QDRANT CLIENT
+=================================================================
+Collection 'products_v1' created with size=64 and cosine distance.
+
+=================================================================
+PART 2: INGESTING POINTSTRUCT OBJECTS
+=================================================================
+Upserted 4 points into 'products_v1'.
+
+=================================================================
+PART 3: CREATING PAYLOAD INDEX FOR FILTERING
+=================================================================
+C:\Users\adars\Documents\Projects\agenticAI\2.AgentFrameworks\04_qdrant\01_qdrant_basics.py:82: UserWarning: Payload indexes have no effect in the local Qdrant. Please use server Qdrant if you need payload indexes.
+  client.create_payload_index(
+Payload index created on field: 'category' (KEYWORD)
+
+=================================================================
+PART 4: FILTERED SEARCH (category == 'compute' AND active == True)
+=================================================================
+Filtered Matches (Strictly category: compute & active: True):
+   Rank 1: ID=1   | Score=1.0000 | Name=Cloud Server Pro | Price=$120.0
+   Rank 2: ID=4   | Score=0.7618 | Name=High-Mem Cloud Server | Price=$250.0
+
+=================================================================
+PART 5: ZERO-DOWNTIME ALIAS SWAPPING
+=================================================================
+Alias 'production_products' points to -> 'products_v1'.
+Atomically switched alais 'production_products' -> 'products_v2'.
+Query via Alias 'production_products' now returned ID: 999 (Next-Gen AI Server v2)       
+
+=================================================================
+QDRANT DEMO COMPLETED SUCCESSFULLY!
+=================================================================
+

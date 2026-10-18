@@ -6,10 +6,10 @@ Having already mastered the fundamentals **from first principles (scratch)** in 
 
 ---
 
-## 📍 Current Status: `Phase 0 (Vector DB Mastery: FAISS ✅ | ChromaDB ✅ | Pinecone ✅ | Qdrant 🟡)` — In Progress 🚀
+## 📍 Current Status: `Phase 0 Complete ✅ (FAISS, ChromaDB, Pinecone, Qdrant) ──▶ Phase 1 (Hugging Face Ecosystem & Local Models) 🟡` — In Progress 🚀
 
 ```
-[🟡 Phase 0] ──▶ [⚪ Phase 1] ──▶ [⚪ Phase 2] ──▶ [⚪ Phase 3] ──▶ [⚪ Phase 4] ──▶ [⚪ Phase 5]
+[✅ Phase 0] ──▶ [🟡 Phase 1] ──▶ [⚪ Phase 2] ──▶ [⚪ Phase 3] ──▶ [⚪ Phase 4] ──▶ [⚪ Phase 5]
 Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider APIs    Production
 (FAISS/Qdrant/    (Transformers/   (RAG/Query       (Agents/State    (OpenAI/Claude/  Capstone
  Pinecone/Chroma)  Embeddings)      Engines)         Machines)        LiteLLM)         Portfolio
@@ -21,7 +21,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 
 ---
 
-### Phase 0: Vector Databases & Similarity Search Engines (NOT STARTED ⚪)
+### Phase 0: Vector Databases & Similarity Search Engines (COMPLETED ✅)
 *Mastering local embedded indices and production cloud vector databases, their indexing algorithms, and metadata filtering.*
 
 - [x] **Local Vector Search with FAISS (Facebook AI Similarity Search)**:
@@ -35,14 +35,14 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
   - Multi-tenant data segregation using Pinecone **Namespaces**.
   - Hybrid search using dense embeddings + sparse vectors (SPLADE / BM25).
   - Metadata pre-filtering under high cardinality.
-- [ ] **High-Performance Self-Hosted Vector Engine with Qdrant**:
+- [x] **High-Performance Self-Hosted Vector Engine with Qdrant**:
   - Running Qdrant locally via Docker / Python client.
   - Single-stage filtered HNSW search with payload schemas (pre-filtering without index degradation).
   - Snapshotting, collection aliases, and point payloads.
 
 ---
 
-### Phase 1: Hugging Face Ecosystem & Local Model Deployment (NOT STARTED ⚪)
+### Phase 1: Hugging Face Ecosystem & Local Model Deployment (IN PROGRESS 🟡)
 *Moving beyond proprietary APIs: running open-source embeddings, cross-encoders, and quantized local models.*
 
 - [ ] **Embedding & Re-ranking with `sentence-transformers`**:
