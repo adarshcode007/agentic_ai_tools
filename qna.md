@@ -376,3 +376,66 @@ This living document logs architectural dilemmas, failure modes, mathematical tr
        5. *Instant Rollback:* If an anomaly or latency regression is detected in `products_v2`, a single alias swap call immediately points `production_products` back to `products_v1` in under 1 millisecond without modifying backend code.
 
 ---
+
+### Q13: Asymmetric Instruction Embeddings (BGE/E5), Cross-Encoder Logits vs. Cosine Similarity, and Sigmoid Normalization
+
+* **Context:**
+  An engineering team builds a production two-stage retrieval pipeline. They upgrade their dense vector retriever to `BAAI/bge-large-en-v1.5` ($d=1024$) and use `cross-encoder/ms-marco-MiniLM-L-6-v2` for second-stage re-ranking.
+
+* **Questions:**
+  1. What is the "Asymmetric Prompting Trap" in modern embedding models? Why does forgetting to prepend `"Represent this sentence for searching relevant passages: "` to user queries cause retrieval recall to collapse, even though BGE-large is a top-tier model?
+  2. Why can Cross-Encoder output scores be negative (e.g., `-4.23` or `-11.27`) whereas Bi-Encoder Cosine Similarity is bounded? How do you mathematically and programmatically convert Cross-Encoder logits into a clean $[0.0, 1.0]$ confidence probability?
+
+* **Senior-Level & Architectural Answer:**
+  1. **The Asymmetric Prompting Trap in Instruction-Tuned Embeddings:**
+     * **Symmetric vs. Asymmetric Retrieval Mechanics:**
+       - *Symmetric Retrieval:* Text pairs share identical structures and lengths (e.g., matching duplicate support tickets or Quora questions). Both sides represent queries or both represent passages.
+       - *Asymmetric Retrieval (Standard RAG):* A short, ambiguous 5-word question (e.g., *"Linux root password reset"*) searches for a long, technical 200-word documentation paragraph (e.g., GRUB bootloader recovery steps).
+     * **Why the Instruction Prefix is Mandatory:**
+       - Foundational models like `BAAI/bge-large-en-v1.5` and `intfloat/e5-large-v2` are trained using contrastive learning across both symmetric and asymmetric tasks simultaneously.
+       - Because queries and passages have completely different syntactic distributions, the model requires an explicit conditioning prompt:
+         `"Represent this sentence for searching relevant passages: "`
+       - This prompt acts as an **instruction trigger** that activates specific attention pathways in the transformer, projecting the short query into the *target candidate answer subspace* rather than the *question clustering subspace*.
+     * **Consequence of Omitting the Prefix:**
+       - If an engineer encodes the user query raw without the prefix, the model treats it as a symmetric search for other short questions.
+       - The query vector lands in the "question syntax" region of the 1024-dimensional space.
+       - The vector database retrieves other questions or superficial title matches instead of detailed resolution paragraphs, causing a sharp drop in Mean Reciprocal Rank (MRR@10) and Recall@K.
+     * **The Golden Ingestion Rule:**
+       - **Queries:** ALWAYS prepend the instruction prefix before encoding.
+       - **Documents/Passages:** NEVER prepend the instruction prefix (encode raw text only).
+
+  2. **Cross-Encoder Logits vs. Cosine Similarity & Sigmoid Calibration:**
+     * **Why Bi-Encoder Scores are Bounded:**
+       In Bi-Encoder retrieval, vector embeddings are unit-normalized ($L_2 = 1.0$). The dot product between two unit vectors is geometrically equal to Cosine Similarity:
+       `score = sum(q_i * d_i) = ||q|| * ||d|| * cos(theta) = cos(theta)`
+       Therefore, Bi-Encoder scores are bounded in the range `[-1.0, 1.0]` (and typically `[0.0, 1.0]` for semantic text).
+     * **Why Cross-Encoder Scores Can Be Highly Negative:**
+       A Cross-Encoder does not compute vector angles. Its output head is an unconstrained linear classification layer (`nn.Linear(hidden_dim, 1)`) sitting directly on top of the transformer's `[CLS]` token:
+       `logit = W * h_CLS + b`
+       The output is a **raw classification logit** $z \in (-\infty, +\infty)$ representing the unnormalized log-odds that the passage answers the query:
+       - $z > 0$: Log-odds favor relevance ($P(\text{relevant}) > 0.5$).
+       - $z = 0$: Ambiguous threshold ($P(\text{relevant}) = 0.5$).
+       - $z < 0$: Log-odds favor irrelevance ($P(\text{relevant}) < 0.5$).
+       - Large negative numbers (like $-11.27$ for the pizza recipe) indicate the model is overwhelmingly certain the passage is completely irrelevant.
+     * **Mathematical Conversion to Confidence Probabilities (Sigmoid):**
+       To map raw logits into a clean $[0.0, 1.0]$ probability scale suitable for threshold filtering in production pipelines, apply the **Sigmoid (logistic) function**:
+       `P(relevant) = 1 / (1 + exp(-z))`
+     * **Code Implementation & Calibration:**
+       ```python
+       import numpy as np
+
+       # Raw logits from Cross-Encoder
+       logits = np.array([1.7993, 1.2722, -4.2360, -11.2720])
+
+       # Sigmoid activation
+       probabilities = 1.0 / (1.0 + np.exp(-logits))
+
+       # Output:
+       # Doc 1 (Keyword Distractor): 1.7993  -> 0.8580 (85.8% confidence)
+       # Doc 2 (Golden Answer):      1.2722  -> 0.7811 (78.1% confidence)
+       # Doc 3 (Semantic Distr.):   -4.2360  -> 0.0142 (1.4% confidence)
+       # Doc 4 (Pizza Recipe):     -11.2720  -> 0.00001 (0.001% confidence)
+       ```
+       In production, setting a strict threshold like `probability >= 0.70` cleanly discards all irrelevant passages before sending context to the LLM.
+
+---

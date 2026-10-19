@@ -45,7 +45,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 ### Phase 1: Hugging Face Ecosystem & Local Model Deployment (IN PROGRESS 🟡)
 *Moving beyond proprietary APIs: running open-source embeddings, cross-encoders, and quantized local models.*
 
-- [ ] **Embedding & Re-ranking with `sentence-transformers`**:
+- [x] **Embedding & Re-ranking with `sentence-transformers`**:
   - Benchmarking open-source embedding models (e.g., `BAAI/bge-large-en-v1.5`, `nomic-embed-text`).
   - Implementing local cross-encoder re-ranking pipelines (`cross-encoder/ms-marco-MiniLM-L-6-v2`) on real GPUs / CPUs.
 - [ ] **Hugging Face `transformers` & Tokenizers**:
