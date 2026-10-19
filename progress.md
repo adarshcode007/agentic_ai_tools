@@ -48,9 +48,9 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 - [x] **Embedding & Re-ranking with `sentence-transformers`**:
   - Benchmarking open-source embedding models (e.g., `BAAI/bge-large-en-v1.5`, `nomic-embed-text`).
   - Implementing local cross-encoder re-ranking pipelines (`cross-encoder/ms-marco-MiniLM-L-6-v2`) on real GPUs / CPUs.
-- [ ] **Hugging Face `transformers` & Tokenizers**:
+- [x] **Hugging Face `transformers` & Tokenizers**:
   - Tokenizer mechanics: subword splitting (BPE/WordPiece), token IDs, attention masks, truncation strategies.
-  - Loading open-source models (Llama 3 / Mistral / Qwen) with `AutoModelForCausalLM` and `pipeline`.
+  - Loading open-source models (Llama 3 / Mistral / Qwen / GPT-2) with `AutoModelForCausalLM` and `pipeline`.
 - [ ] **Quantization & Local Inference**:
   - Running 4-bit and 8-bit quantized models using `bitsandbytes`, AWQ, or GGUF (via `llama-cpp-python`).
   - Offloading inference between CPU, RAM, and GPU VRAM.

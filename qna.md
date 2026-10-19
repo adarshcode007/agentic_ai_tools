@@ -439,3 +439,153 @@ This living document logs architectural dilemmas, failure modes, mathematical tr
        In production, setting a strict threshold like `probability >= 0.70` cleanly discards all irrelevant passages before sending context to the LLM.
 
 ---
+
+### Q14: The Softmax Attention Mask Omission Trap & Left-Padding vs. Right-Padding in Autoregressive Generation
+
+* **Context:**
+  An engineering team builds a high-throughput batch inference pipeline for a causal language model (e.g., Llama-3, GPT-2). They tokenize dynamic-length prompts into a rectangular batch tensor with padding tokens.
+
+* **Questions:**
+  1. What silent failure happens inside the Transformer self-attention Softmax layer if an engineer passes padded `input_ids` to `model(...)` but forgets to provide the `attention_mask`? Does PyTorch crash? How are real token representations mathematically corrupted?
+  2. While right-padding works for encoder models (BERT embeddings), what catastrophic failure occurs if right-padded batches are passed to `model.generate()` in causal decoder LLMs? Why must causal models strictly enforce `tokenizer.padding_side = "left"` during batch generation?
+
+* **Senior-Level & Architectural Answer:**
+  1. **The Softmax Attention Mask Omission Trap (Silent Mathematical Corruption):**
+     * **No Runtime Error (Silent Failure):**
+       PyTorch will **NOT** throw an error or crash. It receives a valid 2D integer tensor of shape `(batch_size, seq_len)`, performs embedding matrix lookups, and executes matrix multiplications cleanly.
+     * **The Mathematical Corruption in Self-Attention:**
+       In the scaled dot-product self-attention equation:
+       `Attention(Q, K, V)_i = sum_j ( exp(Q_i * K_j^T / sqrt(d)) / sum_k exp(Q_i * K_k^T / sqrt(d)) ) * V_j`
+       - *With Attention Mask:* Pad tokens have `mask = 0`. The attention score is forced to `-infinity`, making `exp(-infinity) = 0.0`. The pad tokens contribute zero attention weight to the numerator and denominator.
+       - *Without Attention Mask:* Pad tokens (e.g. `<|endoftext|>` or `0`) are treated as legitimate semantic words. Their dot products `Q_i * K_pad^T` evaluate to positive real scalars (e.g. `1.8` or `2.4`).
+     * **Two Catastrophic Invariants:**
+       1. *Attention Weight Dilution:* Because `exp(Q_i * K_pad^T) > 0`, the denominator `sum_k exp(...)` increases. The attention probabilities assigned to the real words in the sentence are artificially diluted, summing to significantly less than 1.0.
+       2. *Semantic Smearing (Value Vector Bleed):* The pad token's value vector `V_pad` is multiplied by its non-zero attention weight and summed directly into the contextual hidden state of real words. Real words like `"learning"` absorb semantic meaning from `<|endoftext|>`. Every subsequent layer computes attention on corrupted vectors, resulting in degraded perplexity, hallucinated completions, or garbage outputs.
+
+  2. **Left-Padding vs. Right-Padding in Autoregressive Generation (`model.generate()`):**
+     * **The Causal Generation Mechanism:**
+       In decoder-only autoregressive models (GPT-2, Llama, Mistral), generation is sequential and left-to-right. To predict the next token $t+1$, the model inspects the hidden state at the **final rightmost position (index -1)** of the sequence.
+     * **What Happens with Right-Padding (The Generation Disaster):**
+       Consider a batch where Sentence 1 is short (padded) and Sentence 2 is long:
+       - Row 0: `["Deep", "learning", "is", "transformative", "<pad>", "<pad>", "<pad>"]`
+       - Row 1: `["Transformers", "revolutionized", "natural", "language", "processing", "and", "vision"]`
+       When `model.generate()` looks at the final index (position 6) to predict the next token:
+       - For Row 1: Position 6 is `"vision"`. The model predicts the continuation (e.g., `"models"`).
+       - For Row 0: Position 6 is `<pad>`! The model's causal attention only looks backwards. From the perspective of the generation head, the prompt has already concluded, hit a termination token, and is sitting on padding.
+       - **Consequence:** The model either:
+         1. Immediately terminates generation (returns empty completion or stops).
+         2. Continues generating repeated `<pad>` tokens.
+         3. Hallucinates random characters conditioned on the pad token rather than the prompt.
+     * **The Solution: Left-Padding (`tokenizer.padding_side = "left"`):**
+       When configured with left-padding:
+       - Row 0: `["<pad>", "<pad>", "<pad>", "Deep", "learning", "is", "transformative"]`
+       - Row 1: `["Transformers", "revolutionized", "natural", "language", "processing", "and", "vision"]`
+       Now, for **every row in the batch**, the rightmost position (index 6) is the **true last word of the prompt** (`"transformative"` and `"vision"`).
+       When `model.generate()` appends new tokens at step $t+1$, both sequences continue generating their natural continuations in lockstep parallel.
+     * **The Production Rule:**
+       - **Encoder Models (BERT / Embeddings):** Padding side does not matter (default: right).
+       - **Decoder Models (GPT / Llama / Causal LM Generation):** ALWAYS set `tokenizer.padding_side = "left"` before batch generation.
+
+---
+
+### Q15: BPE Subword Fragmentation in Arithmetic, The Trailing Whitespace Prompt Trap, and Why Tokenizers Default to Right-Padding
+
+* **Context:**
+  An engineer evaluates LLM failures on deterministic tasks (multi-digit addition, spelling reversals) and observes erratic behavior in few-shot prompt completions depending on trailing whitespaces.
+
+* **Questions:**
+  1. Why do foundation models fail zero-shot multi-digit addition (e.g. `38492 + 74918`) and string reversals, but succeed when prompted to output each digit/character individually (Chain-of-Thought)? How does BPE tokenization break spatial column alignment?
+  2. Why can a prompt ending with a trailing space (e.g. `"Sentiment: "`) trigger degraded completions or unexpected double spaces compared to `"Sentiment:"`?
+  3. If causal decoder LLMs (GPT/Llama) strictly require left-padding for batch generation, why did our tokenizer script (`01_tokenizer_mechanics.py`) default to right-padding?
+
+* **Senior-Level & Architectural Answer:**
+  1. **BPE Number Chunking & The Loss of Column Alignment:**
+     * **The Arbitrary Chunking Trap:**
+       BPE algorithms treat digits purely as text characters. They greedily merge frequent digit sequences based on internet text frequencies:
+       - `38492` might be tokenized as: `['384', '92']` (a 3-digit token + a 2-digit token).
+       - `74918` might be tokenized as: `['74', '918']` (a 2-digit token + a 3-digit token).
+     * **Breaking Column Alignment:**
+       Elementary school addition requires strict right-to-left column alignment:
+       `Ones (2 + 8), Tens (9 + 1), Hundreds (4 + 9), ...`
+       Because the tokens have unequal lengths (3 vs 2), the transformer's attention heads cannot align the ones column with the ones column in a single forward pass.
+     * **Why Chain-of-Thought (CoT) Solves It:**
+       When prompted to emit digits one-by-one (`3 8 4 9 2` -> `['3', '8', '4', '9', '2']`):
+       1. *Token Uniformity:* Every digit is guaranteed to be its own independent token.
+       2. *Autoregressive Thinking Compute:* The model computes and writes out the intermediate carry-over at each step. By the time it outputs the next digit, its own previous output tokens are in its attention context window, providing the necessary working memory.
+
+  2. **The "Trailing Whitespace" Prompt Engineering Trap:**
+     * **BPE Leading-Space Invariant:**
+       BPE tokenizers (GPT-2, GPT-4, Llama) merge spaces into the *start* of the subsequent word:
+       - `" Hello"` = Token ID `18435` (`'ĠHello'`).
+       - `"Hello"` (no space) = Token ID `15496` (`'Hello'`).
+     * **How Prompts are Tokenized in Real Training Data:**
+       In natural English text, a colon is followed by a space, and the next word absorbs that space:
+       `"Sentiment: Positive"` is tokenized as:
+       `['Sentiment', ':', ' Positive']` (where the space is physically part of `' Positive'`).
+     * **The Bug with Trailing Spaces:**
+       If your prompt template ends with `"Sentiment: "`:
+       The trailing space is tokenized as a standalone whitespace token: `['Sentiment', ':', 'Ġ']`.
+       When the model generates the next token, it cannot emit `' Positive'` because that would produce two consecutive spaces (`"  Positive"`). It is forced to emit `'Positive'` (no space), which is often a rarer, less-calibrated token in that context, or it hallucinates an unwanted extra space.
+     * **Production Rule:** Never end prompt templates or few-shot examples with trailing whitespace. Let the model generate the leading space token naturally.
+
+  3. **Why Tokenizers Default to Right-Padding (The Architecture vs. Task Nuance):**
+     * **Hugging Face Historical Default:**
+       Hugging Face `AutoTokenizer` defaults to `tokenizer.padding_side = "right"` across virtually all models (even GPT-2). This is a legacy design because `transformers` was originally built around BERT encoder classification and pre-training (where loss is calculated across right-padded sequences using label masking).
+     * **Why Right-Padding Worked in `01_tokenizer_mechanics.py`:**
+       In our first script, we **only encoded, inspected matrices, and decoded**. We did **NOT** call `model.generate()`. For static matrix inspection, embeddings, and loss computation, right-padding with an `attention_mask` is mathematically valid.
+     * **The Critical Distinction:**
+       - **Feature Extraction / Embedding / Training:** Right-padding is completely safe with an attention mask.
+       - **Autoregressive Generation (`model.generate()`):** Right-padding is fatal. You must explicitly configure:
+         ```python
+         tokenizer.padding_side = "left"
+         ```
+         before passing batches to `model.generate()`.
+
+---
+
+### Q16: The Causal Repetition Feedback Loop, Logit Penalties, and Sampling Pipeline Execution Order
+
+* **Context:**
+  An engineer evaluates LLM generation behavior across diverse decoding parameters. They observe repetitive looping in greedy search and unexpected conservative behavior when configuring high temperature alongside low top-p.
+
+* **Questions:**
+  1. Mechanically, why does causal self-attention amplify repetition once a phrase is repeated just once? How does a `repetition_penalty` mathematically modify logits before Softmax to break this loop?
+  2. In the sampling pipeline, what is the exact mathematical execution order between Temperature, Softmax, Top-K, and Top-P? If an engineer configures `temperature = 1.8` (high) and `top_p = 0.10` (low), what does the output look like in reality, and why?
+
+* **Senior-Level & Architectural Answer:**
+  1. **The Causal Self-Attention Repetition Amplifier:**
+     * **The Positive Feedback Loop in the KV-Cache:**
+       In a causal decoder, every generated token attends to all previous tokens stored in the Key-Value (KV) cache:
+       `Attention = Softmax(Q * K^T / sqrt(d)) * V`
+       - When the model outputs a phrase once (e.g. *"search for and find"*), that phrase's Key vectors are cached.
+       - If the model begins typing *"search for and"* again, its current Query vector $Q$ is mathematically identical to the earlier Query vector. It computes a massive dot product against the cached Key vector of the earlier instance.
+       - This concentrates attention mass directly onto the previous phrase, causing the next token (*"find"*) to receive an even higher probability than it had initially.
+       - **Result:** Greedy search ($\arg\max$) gets permanently locked into an infinite degenerative loop.
+     * **Mathematical Mechanism of `repetition_penalty`:**
+       Before computing Softmax, the generation engine tracks the set of all unique token IDs that have already appeared in the prompt and generated output. For every token ID $i$ in that set:
+       - If its raw logit $z_i > 0$: divide by the penalty:
+         `z_i = z_i / penalty`  (e.g., `z_i / 1.2`, reducing its probability).
+       - If its raw logit $z_i < 0$: multiply by the penalty:
+         `z_i = z_i * penalty`  (e.g., `z_i * 1.2`, pushing it further negative).
+       This mathematically suppresses the probabilities of previously emitted words, forcing the model to select fresh synonyms or alternate transitions.
+
+  2. **The Sampling Pipeline Execution Sequence & The Hyperparameter Clash:**
+     * **The Strict Mathematical Pipeline Order:**
+       In PyTorch and Hugging Face generation, sampling parameters are executed in a strict chronological sequence:
+       1. *Step 1: Repetition / Frequency Penalty:* Suppresses logits of already-seen tokens.
+       2. *Step 2: Temperature Scaling:* Divides remaining logits by $T$:
+          `z_scaled = z / T`
+          *(Must happen before Softmax; temperature operates on logits, not probabilities).*
+       3. *Step 3: Softmax Normalization:* Converts scaled logits into probabilities:
+          `P = Softmax(z_scaled)`
+       4. *Step 4: Top-K Filtering:* Retains only the top $K$ highest-probability tokens; sets all other probabilities to zero.
+       5. *Step 5: Top-P (Nucleus) Filtering:* Sorts remaining tokens descending and keeps only the smallest subset whose cumulative sum $\sum P(w_i) \ge P$.
+       6. *Step 6: Renormalization & Sampling:* Renormalizes the remaining subset so $\sum P = 1.0$, and samples the next token.
+     * **The Clash (`temperature = 1.8`, `top_p = 0.10`):**
+       - **The Intent:** The engineer hoped $T=1.8$ would produce wild, high-entropy creativity.
+       - **The Reality (Hyper-Conservative & Rigid Output):**
+         While $T=1.8$ flattens the probability curve across all 50,000 tokens, **Step 5 (`top_p = 0.10`) immediately suffocates the candidate pool**.
+         A threshold of $0.10$ tells the model: *"Only consider the top 1 or 2 tokens that make up the first 10% of probability mass, and completely discard the other 49,998 tokens."*
+       - **Conclusion:** `top_p = 0.10` completely castrates the effect of $T=1.8$. The model is forced to choose between only the top 1 or 2 safest words, resulting in an output that is almost as rigid and deterministic as greedy search!
+
+---

@@ -1,0 +1,76 @@
+
+======================================================================
+  PART 1: LOADING LOCAL CASUAL MODEL (GPT-2)
+======================================================================
+Loading Tokenizer: 'gpt2'...
+Tokenizer configured with: padding_side='left'
+Loading Causal Weights: 'gpt2' (124M parameters)...
+Loading weights: 100%|███████████████████████████████| 148/148 [00:00<00:00, 553.42it/s]
+Model loaded successfully into local RAM!
+
+======================================================================
+  PART 2: BATCH GENERATION WITH LEFT-PADDING
+======================================================================
+Batch Prompts (Unequal Lengths):
+  [1] "Artificial Intelligence will"
+  [2] "The quickest path to mastering distributed systems and cloud architecture is"
+
+Left-Padded 'input_ids' Matrix (Notice pad tokens on the LEFT of Prompt 1):
+tensor([[50256, 50256, 50256, 50256, 50256, 50256, 50256,  8001,  9542,  9345,
+           481],
+        [  464, 46264,  3108,   284, 45116,  9387,  3341,   290,  6279, 10959,
+           318]])
+
+'attention_mask' Matrix (0 for left pad tokens, 1 for real words):
+tensor([[0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+        [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]])
+
+Generating completions with model.generate()...
+
+Generated Completions (Greedy Search):
+----------------------------------------------------------------------
+Prompt [1] Continuation:
+  "Artificial Intelligence will be able to do things like create a new type of robot, or create a new type of robot that can do things like"
+
+Prompt [2] Continuation:
+  "The quickest path to mastering distributed systems and cloud architecture is to build a distributed system that is scalable and scalable to the needs of the user.
+
+The first step is to build"
+
+
+======================================================================
+  PART 3: DECODING STRATEGIES COMPARISON
+======================================================================
+Base Prompt: "In the future, autonomous AI agents will"
+
+[1] Greedy Search (Deterministic):
+    "In the future, autonomous AI agents will be able to do things like search for and find people, and to do things like search for and find people, and to do things like search for"
+
+[2] Low Temp (T=0.3 - Focused):
+    "In the future, autonomous AI agents will be able to work with humans in ways that are far less complex than what we currently have.
+
+For example, autonomous robots could be able to"
+
+[3] High Temp (T=1.4 - High Entropy / Creative):
+    "In the future, autonomous AI agents will evolve into what you'd describe as semi-real humans which would function as real society as quickly and efficiently as can be imagined by machines. These machines"
+
+[4] Top-K (50) + Top-P (0.90) Sampling (Standard Production Balanced):
+    "In the future, autonomous AI agents will be able to perform tasks that are far beyond their ability to perform.
+
+The question then becomes: What will the future hold for AI? Will"
+
+
+======================================================================
+  PART 4: HIGH-LEVEL HUGGING FACE PIPELINE ABSTRACTION
+======================================================================
+Running generator pipeline on custom prompt...
+
+Pipeline Output:
+  "To build a resilient vector database, you need to build a database that will be safe from attacks.
+
+This is how we get started with the first version"
+
+======================================================================
+  CAUSAL GENERATION & PIPELINES DEMO COMPLETED SUCCESSFULLY!
+======================================================================
+

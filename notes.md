@@ -336,6 +336,133 @@ CROSS-ENCODER (Re-ranking Model: ms-marco-MiniLM-L-6-v2)
 * **Production Standard:** Stack them into a multi-stage funnel:
   `10M Docs` ──▶ `Dense + BM25 + RRF` ──▶ `Top-25 Candidates` ──▶ `Cross-Encoder` ──▶ `Top-3 to LLM`
 
+---
+
+## 10. Hugging Face Tokenizers: BPE vs. WordPiece, Attention Masks & Padding Dynamics
+
+### 1. Subword Tokenization Algorithms (BPE vs. WordPiece)
+
+* **Byte-Pair Encoding (BPE - GPT/Llama):**
+  * Starts with individual bytes/characters.
+  * Greedily merges the most frequently co-occurring character pairs based on training corpus frequencies.
+  * Merges leading spaces with the subsequent word (e.g., `' Hello'` $\to$ token ID `18435`, `'Hello'` $\to$ token ID `15496`).
+* **WordPiece (BERT):**
+  * Similar to BPE, but evaluates likelihood maximization rather than pure frequency.
+  * Prepends `##` to signify continuation subwords (e.g., `'user'`, `'##au'`, `'##the'`, `'##nti'`, `'##cation'`).
+* **The "Strawberry" & Spelling Mystery:**
+  * LLMs never see individual ASCII characters. Words are compressed into integer subword tokens.
+  * In GPT-4/BPE, `"strawberry"` is split into `['str', 'aw', 'berry']`. The neural network only sees three integer IDs. Asking an LLM to count the letter `'r'` forces it to hallucinate internal spelling from compressed vector representations.
+
+---
+
+### 2. Multi-Digit Arithmetic & The Column Alignment Barrier
+
+* **The Problem:** BPE tokenizers group digits unpredictably based on internet text frequency:
+  * `38492` $\to$ `['384', '92']` (3-digit chunk + 2-digit chunk)
+  * `74918` $\to$ `['74', '918']` (2-digit chunk + 3-digit chunk)
+* **The Failure:** Elementary column addition requires pairing ones with ones, tens with tens, and hundreds with hundreds. Because the subword tokens have unequal lengths, the transformer's attention heads cannot align columns across rows in a single forward pass.
+* **The Chain-of-Thought Solution:** Forcing the LLM to emit one digit at a time (`3 8 4 9 2`) forces 1-to-1 digit tokenization. As the model emits each digit, its own output enters the attention context window, providing intermediate memory to calculate the carry-over at each step.
+
+---
+
+### 3. Batch Padding & The Attention Mask Softmax Math
+
+* **Hardware Requirement:** Parallel matrix multiplication requires a rigid 2D tensor `(batch_size, max_seq_len)`. Shorter sequences must be filled with `pad_token_id`.
+* **The Softmax Math:**
+  Inside multi-head attention:
+  `Attention(Q, K, V) = Softmax( (Q * K^T / sqrt(d)) + M ) * V`
+  * For real tokens (`mask = 1`): $M_{ij} = 0.0$.
+  * For pad tokens (`mask = 0`): $M_{ij} = -\infty$.
+  * Because $e^{-\infty} = 0.0$, the attention weight assigned to the pad token is exactly $0.0000$, preventing padding tokens from diluting or corrupting the embeddings of real words.
+
+---
+
+### 4. Left-Padding vs. Right-Padding in Autoregressive Decoders
+
+* **Why Hugging Face Defaults to Right-Padding:** Historically designed for BERT encoder classification and pre-training, where right-padding with attention masking is standard.
+* **Why Right-Padding Fails in `model.generate()`:**
+  * Causal decoders (GPT-2, Llama, Mistral) predict the next token $t+1$ based on the **final rightmost token (index -1)** in the sequence.
+  * If a sequence is right-padded (`[word, word, pad, pad]`), the rightmost token is `<pad>`. The generation loop thinks the prompt has already concluded, causing immediate termination, repeated `<pad>` generation, or hallucinations.
+* **The Production Invariant:**
+  * For encoder models (BERT/embeddings): Padding side does not matter.
+  * For causal decoders (GPT/Llama batch generation): ALWAYS set `tokenizer.padding_side = "left"` before calling `model.generate()`.
+
+---
+
+## 11. LLM Generation Mechanics: Next-Token Prediction & Production Decoding Strategies
+
+### 1. The Core Mental Model: The Next-Token Probability Engine
+
+An LLM is fundamentally an autoregressive next-token prediction machine:
+1. It does **not** generate sentences, paragraphs, or thoughts all at once.
+2. At every discrete step $t$, the final transformer layer produces a hidden state vector $h_t \in \mathbb{R}^{d}$.
+3. The **Language Model Head** (`nn.Linear(d, vocab_size)`) projects $h_t$ into raw classification logits across the entire vocabulary (e.g., 50,257 for GPT-2, 128,000 for Llama-3).
+4. Applying **Softmax** converts these logits into a probability distribution summing to 1.0:
+   `P(w_i) = exp(z_i) / sum_j exp(z_j)`
+5. A **Decoding Strategy** is the selection algorithm that picks the single next token from this probability distribution, appends it to the sequence, and feeds the updated text back into the model for the next step.
+
+---
+
+### 2. The 4 Core Decoding Strategies
+
+```
+Logits across 50,000 tokens
+          │
+          ▼
+    [Temperature]  ──▶ Rescales probabilities (sharpens or flattens distribution)
+          │
+          ▼
+   [Top-K Truncation] ──▶ Discards all tokens below rank K (e.g. keeps only top 50)
+          │
+          ▼
+   [Top-P Filtering]  ──▶ Keeps only the smallest nucleus of tokens summing to P% (e.g. 90%)
+          │
+          ▼
+    [Sample / Argmax] ──▶ Selects final token to append
+```
+
+#### Strategy A: Greedy Search (`do_sample=False`)
+* **Mechanism:** Strictly picks the token with the absolute maximum probability:
+  `Next Token = argmax P(w)`
+* **Pros:** 100% deterministic and reproducible.
+* **Cons (The Repetition Trap):** Highly vulnerable to degenerative repetition loops (e.g., repeating *"search for and find people, and to do things like search for and find people..."*). Once it emits a phrase that has high self-continuation probability, it cannot break out.
+
+#### Strategy B: Temperature Scaling (`temperature=T`)
+* **Mechanism:** Divides raw logits by temperature $T$ before computing Softmax:
+  `P(w_i) = exp(z_i / T) / sum_j exp(z_j / T)`
+* **Low Temperature ($T \in [0.1, 0.5]$):**
+  * Divides by a fraction $\to$ magnifies logit differences.
+  * The top 1–2 tokens dominate the probability mass; low-probability words drop to near zero.
+  * **Behavior:** Highly focused, conservative, deterministic, and safe.
+* **High Temperature ($T \in [1.0, 1.5]$):**
+  * Divides by a larger number $\to$ compresses logit differences.
+  * Flattens the curve, giving lower-ranked tokens a realistic chance of selection.
+  * **Behavior:** Creative, surprising vocabulary, but high risk of grammatical degradation and hallucinations.
+
+#### Strategy C: Top-K Sampling (`top_k=K`)
+* **Mechanism:** Hard cutoff. Keeps only the $K$ most probable tokens (e.g. $K=50$) and zeros out the probabilities of the remaining 49,950+ tokens.
+* **Purpose:** Prevents catastrophic sampling errors by ensuring the model never accidentally selects bizarre, low-probability tail tokens.
+
+#### Strategy D: Top-P (Nucleus) Sampling (`top_p=P`)
+* **Mechanism:** Dynamic cutoff. Sorts tokens in descending order and retains only the smallest subset whose cumulative probability reaches threshold $P$ (e.g., $P=0.90$):
+  `sum_{i=1}^{k} P(w_i) >= P`
+* **Why Top-P Beats Top-K:**
+  * *High Confidence:* When the model is 98% certain of the next word (e.g., *"United"* $\to$ *"States"*), Top-P dynamically collapses the pool to **1 single token**, preventing any risk of error.
+  * *Low Confidence:* When many adjectives are valid (e.g., *"The movie was..."*), Top-P dynamically expands to let dozens of plausible tokens compete.
+
+---
+
+### 3. Production Hyperparameter Presets: What is Used in Industry?
+
+| Production Task | Temperature | Top-P | Top-K | Rationale |
+| :--- | :--- | :--- | :--- | :--- |
+| **Structured JSON / SQL / Function Calling** | **`0.0`** (or `0.1`) | `1.0` | `1` | Zero tolerance for syntax errors. Requires strict determinism so Pydantic validation never fails. |
+| **Enterprise RAG & Fact-Retrieval Q&A** | **`0.2 – 0.3`** | `0.80` | `40` | High factual fidelity. Minimizes creative hallucinations while allowing natural sentence flow. |
+| **General Conversational Chat (ChatGPT / Claude)** | **`0.7`** | **`0.90`** | **`50`** | The global standard. Balances human-like stylistic variety with logical coherence and eliminates repetition loops. |
+| **Brainstorming / Creative Writing** | **`1.0 – 1.2`** | `0.95` | `100` | Encourages metaphoric connections, diverse vocabulary, and non-obvious phrasing. |
+
+
+
 
 
 

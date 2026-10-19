@@ -1,0 +1,89 @@
+
+======================================================================
+  PART 1: LOADING TOKENIZERS (BPE vs. WordPiece)
+======================================================================
+Loading GPT-2 Tokenizer (BPE)...
+  * GPT-2 Vocab Size : 50,257 tokens
+Loading BERT Tokenizer (WordPiece)...
+  * BERT Vocab Size  : 30,522 tokens
+
+======================================================================
+  PART 2: SUBWORD SPLITTING & THE LLM BLIND SPOT
+======================================================================
+
+Analyzing Word: 'strawberry'
+  [GPT-2 BPE]     Tokens: ['st', 'raw', 'berry']
+                  IDs   : [301, 1831, 8396]
+  [BERT WordPiece] Tokens: ['strawberry']
+                  IDs   : [16876]
+
+Analyzing Word: 'UserAuthenticationError_v2'
+  [GPT-2 BPE]     Tokens: ['User', 'Authent', 'ication', 'Error', '_', 'v', '2']
+                  IDs   : [12982, 47649, 3299, 12331, 62, 85, 17]
+  [BERT WordPiece] Tokens: ['user', '##au', '##the', '##nti', '##cation', '##er', '##ror', '_', 'v', '##2']
+                  IDs   : [5310, 4887, 10760, 16778, 10719, 2121, 29165, 1035, 1058, 2475]
+
+Analyzing Word: 'unconstitutional'
+  [GPT-2 BPE]     Tokens: ['un', 'constitutional']
+                  IDs   : [403, 18789]
+  [BERT WordPiece] Tokens: ['unconstitutional']
+                  IDs   : [20454]
+
+💡 Architectural Insight:
+  Notice 'strawberry' -> ['straw', 'berry'] (or ['str', 'aw', 'berry']).
+  The LLM NEVER sees the letters 's-t-r-a-w-b-e-r-r-y'. It only receives two
+  integer numbers. Asking an LLM 'how many r's in strawberry' is asking it to
+  guess internal character spelling from compressed vector concepts!
+
+======================================================================
+  PART 3: WHITESPACE SENSITIVITY (Why Leading Spaces Matter)
+======================================================================
+Input String    | Tokens               | Token IDs
+-------------------------------------------------------
+'Hello'         | ['Hello']            | [15496]
+' Hello'        | ['ĠHello']           | [18435]
+' hello'        | ['Ġhello']           | [23748]
+'HELLO'         | ['HE', 'LL', 'O']    | [13909, 3069, 46]
+
+💡 Architectural Insight:
+  Notice that 'Hello' and ' Hello' (with leading space) have DIFFERENT token IDs!        
+  In prompt engineering, an accidental space before a stop token or variable
+  changes the integer fed to the neural network entirely.
+
+======================================================================
+  PART 4: BATCH PADDING, TRUNCATION & THE ATTENTION MASKS
+======================================================================
+Raw Batch Sentences:
+  Sentence 1: "Deep learning is transformative."
+  Sentence 2: "Transformers revolutionized natural language processing and computer vision."
+
+Encoded Batch Structure:
+  Keys in output dictionary: ['input_ids', 'attention_mask']
+
+1. 'input_ids' Matrix (Shape: (2, 11)):
+[[29744  4673   318 43590    13 50256 50256 50256 50256 50256 50256]
+ [41762   364  5854  1143  3288  3303  7587   290  3644  5761    13]]
+
+2. 'attention_mask' Matrix (Shape: (2, 11)):
+[[1 1 1 1 1 0 0 0 0 0 0]
+ [1 1 1 1 1 1 1 1 1 1 1]]
+
+💡 Architectural Insight on Attention Masks:
+  Why are attention masks mandatory?
+  The 1s indicate REAL words; the 0s indicate PAD tokens.
+  In the Transformer Attention equation Softmax(Q * K^T / sqrt(d)),
+  mask 0 forces the attention score to -Infinity.
+  exp(-Inf) = 0.0, which guarantees that padding words do NOT contribute
+  to the attention weights of real words!
+
+======================================================================
+  PART 5: DETOKENIZATION & SPECIAL TOKENS
+======================================================================
+Original IDs: [29744, 4673, 318, 43590, 13, 50256, 50256, 50256, 50256, 50256, 50256]    
+With Special Tokens : "Deep learning is transformative.<|endoftext|><|endoftext|><|endoftext|><|endoftext|><|endoftext|><|endoftext|>"
+Clean (Skipped)     : "Deep learning is transformative."
+
+======================================================================
+  TOKENIZER MECHANICS DEMO COMPLETED SUCCESSFULLY!
+======================================================================
+
