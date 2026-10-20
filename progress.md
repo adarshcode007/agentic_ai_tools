@@ -51,7 +51,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 - [x] **Hugging Face `transformers` & Tokenizers**:
   - Tokenizer mechanics: subword splitting (BPE/WordPiece), token IDs, attention masks, truncation strategies.
   - Loading open-source models (Llama 3 / Mistral / Qwen / GPT-2) with `AutoModelForCausalLM` and `pipeline`.
-- [ ] **Quantization & Local Inference**:
+- [x] **Quantization & Local Inference**:
   - Running 4-bit and 8-bit quantized models using `bitsandbytes`, AWQ, or GGUF (via `llama-cpp-python`).
   - Offloading inference between CPU, RAM, and GPU VRAM.
 - [ ] **Hugging Face Hub & Model Management**:
