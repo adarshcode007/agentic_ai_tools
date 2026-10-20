@@ -6,10 +6,10 @@ Having already mastered the fundamentals **from first principles (scratch)** in 
 
 ---
 
-## 📍 Current Status: `Phase 0 Complete ✅ (FAISS, ChromaDB, Pinecone, Qdrant) ──▶ Phase 1 (Hugging Face Ecosystem & Local Models) 🟡` — In Progress 🚀
+## 📍 Current Status: `Phase 0 Complete ✅ ──▶ Phase 1 Complete ✅ ──▶ Phase 2 (LlamaIndex — The Production RAG Standard) 🟡` — In Progress 🚀
 
 ```
-[✅ Phase 0] ──▶ [🟡 Phase 1] ──▶ [⚪ Phase 2] ──▶ [⚪ Phase 3] ──▶ [⚪ Phase 4] ──▶ [⚪ Phase 5]
+[✅ Phase 0] ──▶ [✅ Phase 1] ──▶ [🟡 Phase 2] ──▶ [⚪ Phase 3] ──▶ [⚪ Phase 4] ──▶ [⚪ Phase 5]
 Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider APIs    Production
 (FAISS/Qdrant/    (Transformers/   (RAG/Query       (Agents/State    (OpenAI/Claude/  Capstone
  Pinecone/Chroma)  Embeddings)      Engines)         Machines)        LiteLLM)         Portfolio
@@ -42,7 +42,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 
 ---
 
-### Phase 1: Hugging Face Ecosystem & Local Model Deployment (IN PROGRESS 🟡)
+### Phase 1: Hugging Face Ecosystem & Local Model Deployment (COMPLETED ✅)
 *Moving beyond proprietary APIs: running open-source embeddings, cross-encoders, and quantized local models.*
 
 - [x] **Embedding & Re-ranking with `sentence-transformers`**:
@@ -54,12 +54,12 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 - [x] **Quantization & Local Inference**:
   - Running 4-bit and 8-bit quantized models using `bitsandbytes`, AWQ, or GGUF (via `llama-cpp-python`).
   - Offloading inference between CPU, RAM, and GPU VRAM.
-- [ ] **Hugging Face Hub & Model Management**:
-  - Authenticating with HF tokens, hosting datasets, and using serverless Hugging Face Inference Endpoints.
+- [x] **Hugging Face Hub & Model Management**:
+  - Authenticating with HF tokens, local cache architecture inspection (`scan_cache_dir`), gated model compliance, and serverless Inference Endpoints / Inference Providers router.
 
 ---
 
-### Phase 2: LlamaIndex — The Production RAG Standard (NOT STARTED ⚪)
+### Phase 2: LlamaIndex — The Production RAG Standard (IN PROGRESS 🟡)
 *Mastering the data framework designed specifically for advanced indexing, document intelligence, and retrieval.*
 
 - [ ] **Data Ingestion & Document Abstraction**:
