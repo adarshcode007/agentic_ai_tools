@@ -1,0 +1,23 @@
+
+======================================================================
+  CONNECTING LLAMAINDEX TO CHROMADB
+======================================================================
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights: 100%|██████████████████████████████| 103/103 [00:00<00:00, 3122.72it/s]
+ChromaDB persistent collection 'enterprise_knowledge_base' ready at: C:\Users\adars\Documents\Projects\agenticAI\2.AgentFrameworks\10_llamaindex_indices\chroma_storage
+
+Indexing 2 document(s) directly into ChromaDB...
+VectorStoreIndex successfully synced with ChromaDB!
+
+--- Direct ChromaDB Inspection ---
+Total Vectors in Chroma Collection: 2
+Sample Chroma ID: 2ddcd7b3-53ee-4498-9ed8-1173fbbc47f0
+Sample Chroma Metadata Keys: ['last_modified_date', 'doc_id', 'file_name', 'ref_doc_id', '_node_content', 'creation_date', 'file_path', 'document_id', '_node_type', 'file_size']
+
+======================================================================
+  RETRIEVING VIA CHROMADB HNSW BACKEND
+======================================================================
+Query Result:
+  * Matched File : compliance_policy.md
+  * Top Score    : 0.3603
+ Custo...on 1: Customer Data Isolationance & Retention Policy

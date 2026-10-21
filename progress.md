@@ -65,7 +65,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 - [x] **Data Ingestion & Document Abstraction**:
   - Ingesting unstructured data using `SimpleDirectoryReader` and file-specific parsers (PDF, Markdown, HTML).
   - Document vs `TextNode` abstractions: chunking, node relationships (`NodeRelationship.PARENT`, `CHILD`).
-- [ ] **Index Architectures**:
+- [x] **Index Architectures**:
   - `VectorStoreIndex`: Creating, persisting, and querying dense vector indices.
   - `SummaryIndex` and `KeywordTableIndex`: When and how to pair them with vector stores.
   - Connecting LlamaIndex to external storage backends (Qdrant, Pinecone, Chroma).
