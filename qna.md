@@ -699,3 +699,39 @@ This living document logs architectural dilemmas, failure modes, mathematical tr
        - *Programmatic Audit:* Use `huggingface_hub.scan_cache_dir()` in maintenance jobs to inspect total MB consumed and identify detached revisions.
        - *Pruning:* Run `huggingface-cli delete-cache` to selectively purge unreferenced older model revisions.
        - *Container Storage Pattern:* Never download model weights inside Docker build steps (`RUN python -c "AutoModel.from_pretrained(...)"`). Instead, mount a persistent external Network File System (NFS) or host volume to `/root/.cache/huggingface` across pod replicas.
+
+---
+
+### Q20: LlamaIndex Document vs. TextNode Duality, Metadata Masking (`excluded_llm` vs `excluded_embed`), and Graph Topology
+
+* **Context:**
+  An enterprise engineering team is designing a production ingestion pipeline in LlamaIndex for customer financial records, legal contracts, and engineering runbooks. They must support accurate citation generation without leaking sensitive database credentials to LLM prompt completions or distorting dense vector search.
+
+* **Questions:**
+  1. What is the fundamental difference between a `Document` and a `TextNode` in LlamaIndex? Can you query or embed a `Document` directly in a production vector store?
+  2. Why does LlamaIndex provide separate `excluded_llm_metadata_keys` and `excluded_embed_metadata_keys` lists on `Document` objects? What happens if you send raw text with zero metadata vs. sending all metadata to the LLM?
+  3. How does `NodeRelationship` solve the "Context Fragmentation" problem in RAG? How does a `PrevNextNodePostprocessor` leverage this topology without making extra vector database calls?
+
+* **Senior-Level & Architectural Answer:**
+  1. **Document vs. TextNode Duality:**
+     * **`Document` (Macro Object):** Represents a raw source entity in its entirety (a complete 50-page PDF, a markdown guide, or an unparsed database record) along with top-level container metadata (`file_name`, `file_size`, `author`). It is *not* the unit of vector search.
+     * **`TextNode` (Micro Object / Atomic Retrieval Unit):** The fundamental unit stored in vector indices and docstores. A `TextNode` contains a bounded chunk of text (e.g. 120 tokens parsed via `SentenceSplitter`), its own embedding vector, inherited metadata, and graph pointers to neighboring chunks. In production, vector search engines strictly store and index `TextNode` objects, not raw `Document` objects.
+
+  2. **Metadata Masking (`excluded_llm` vs. `excluded_embed`):**
+     * **The "Context Amputation" Risk (Zero Metadata to LLM):**
+       If an engineer strips all metadata, sending only chunk text to the LLM, the model suffers from lost grounding. For instance, a chunk stating "Leave allowance is 25 days" becomes ambiguous if the model cannot see `{"country": "UK", "handbook_year": "2024"}`. It cannot cite sources or resolve conflicting company policies across jurisdictions.
+     * **The "Token Bloat & Security Leak" Risk (All Metadata to LLM):**
+       Injecting operational keys (`db_secret_arn`, `s3_uri`, `file_size`, `primary_key_id`) into prompts consumes LLM token budget, increases latency, and poses serious data leakage risks. `excluded_llm_metadata_keys` strips these before prompt injection.
+     * **The "Semantic Distort" Risk (All Metadata to Vector Embeddings):**
+       Dense embedding models embed the text representation of metadata. If operational keys like `environment: production` or arbitrary UUIDs are included, they distort vector distances, causing documents from the same environment to cluster regardless of their semantic meaning. `excluded_embed_metadata_keys` strips these prior to vectorization.
+
+  3. **Graph Topology & The Window Retrieval Pattern:**
+     * **The Inherent RAG Dilemma:**
+       Small chunks yield high vector retrieval precision (no irrelevant sentences to dilute cosine similarity). However, small chunks amputate surrounding context required for the LLM to formulate complete answers.
+     * **How `NodeRelationship` Solves It:**
+       During chunking, `SentenceSplitter` automatically links nodes via `NodeRelationship.PREVIOUS`, `NEXT`, and `SOURCE`.
+     * **Zero-Lookup Window Expansion (`PrevNextNodePostprocessor`):**
+       When a query matches a specific node (e.g., `Node 1`), `PrevNextNodePostprocessor` inspects `Node 1.relationships[NodeRelationship.PREVIOUS]` and `NEXT` pointers to directly pull `Node 0` and `Node 2` from the key-value docstore by ID ($O(1)$ dictionary lookup). This provides the LLM with a 3x wider context window without executing any additional approximate nearest neighbor vector searches.
+
+---
+

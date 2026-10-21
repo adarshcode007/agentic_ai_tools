@@ -1,0 +1,4 @@
+The Core Banking System (CBS) processes real-time ledger updates across 500 branches.
+High-frequency transactions route through Kafka event streams into a distributed Cassandra cluster.
+All ledger mutations require two-phase commit validation to prevent double-spending anomalies.
+Audit logs are asynchronously written to immutable S3 buckets with Object Lock enabled for 7 years.

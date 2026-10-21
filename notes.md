@@ -587,6 +587,67 @@ Hugging Face permissions separate Git access from compute execution:
     ```
   - Mount a persistent cache volume to `/root/.cache/huggingface` so pod restarts do not waste egress bandwidth re-downloading multi-gigabyte models.
 
+---
+
+## 14. LlamaIndex Core Ingestion, Document Abstraction & Node Topology
+
+### 1. The Core Abstraction Hierarchy
+
+```
+[Raw File / DB / API] ──▶ Document (Macro Container: raw text + file/source metadata)
+                                │
+                                ▼ (SentenceSplitter / NodeParser)
+                          TextNode (Micro Unit: chunk text + vector embedding + relationships)
+```
+
+* **`Document` (Macro Object):**
+  - Represents an entire file (PDF, Markdown, HTML) or raw payload (SQL record, webhook).
+  - Contains high-level metadata: `file_name`, `file_size`, `creation_date`, or business tags (`tenant_id`, `department`).
+* **`TextNode` (Atomic Unit of Retrieval):**
+  - The actual object stored in vector databases and embedded by embedding models.
+  - Inherits parent metadata, holds its specific text chunk, and stores bidirectional graph links.
+
+---
+
+### 2. Surgical Metadata Masking (`excluded_llm` vs. `excluded_embed`)
+
+In production RAG, prepending metadata to text can solve ambiguity or cause catastrophic failures depending on the target:
+
+| Configuration | Why Use It | What It Solves |
+| :--- | :--- | :--- |
+| `excluded_llm_metadata_keys` | Strips keys when building the prompt (`metadata_mode='llm'`) | Prevents leaking sensitive data (API keys, secret ARNs) and saves prompt token budget by omitting operational IDs. |
+| `excluded_embed_metadata_keys` | Strips keys when passing text to the vector model (`metadata_mode='embed'`) | Prevents noisy operational tags (`environment='prod'`, `page_label=12`) from distorting semantic vector similarity. |
+
+* **Context Grounding vs. Context Amputation:**
+  - Sending *no metadata* to the LLM amuptates crucial context (the LLM cannot cite source titles, author, or dates).
+  - Sending *all metadata* wastes context window and introduces prompt distraction.
+
+---
+
+### 3. Graph Topology: `NodeRelationship` & Window Retrieval
+
+LlamaIndex automatically maintains graph pointers on every `TextNode`:
+
+```
+                 ┌────────────────────────────────────────────────────────┐
+                 │                Parent Document (SOURCE)                │
+                 └───────────────────────────┬────────────────────────────┘
+                                             │
+             ┌───────────────────────────────┼───────────────────────────────┐
+             ▼                               ▼                               ▼
+     ┌───────────────┐               ┌───────────────┐               ┌───────────────┐
+     │  TextNode 0   │ ── NEXT ────▶ │  TextNode 1   │ ── NEXT ────▶ │  TextNode 2   │
+     │               │ ◀── PREV ──── │               │ ◀── PREV ──── │               │
+     └───────────────┘               └───────────────┘               └───────────────┘
+```
+
+* **`NodeRelationship.SOURCE`:** Points back to the parent `Document.doc_id`.
+* **`NodeRelationship.PREVIOUS` & `NEXT`:** Doubly-linked list between sequential chunks.
+* **Production Advantage (Sentence Window Retrieval):**
+  - Vector search matches small, granular chunks (high precision, low noise).
+  - During query time, a postprocessor (`PrevNextNodePostprocessor`) checks `PREVIOUS` and `NEXT` pointers to expand the window with neighboring context without executing additional vector searches.
+
+
 
 
 

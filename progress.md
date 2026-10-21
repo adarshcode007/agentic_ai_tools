@@ -62,7 +62,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 ### Phase 2: LlamaIndex — The Production RAG Standard (IN PROGRESS 🟡)
 *Mastering the data framework designed specifically for advanced indexing, document intelligence, and retrieval.*
 
-- [ ] **Data Ingestion & Document Abstraction**:
+- [x] **Data Ingestion & Document Abstraction**:
   - Ingesting unstructured data using `SimpleDirectoryReader` and file-specific parsers (PDF, Markdown, HTML).
   - Document vs `TextNode` abstractions: chunking, node relationships (`NodeRelationship.PARENT`, `CHILD`).
 - [ ] **Index Architectures**:

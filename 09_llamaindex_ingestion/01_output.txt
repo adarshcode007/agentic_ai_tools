@@ -1,0 +1,78 @@
+
+======================================================================
+  PART 1: INGESTION WITH SimpleDirectoryReader
+======================================================================
+Loaded 2 documents(s) from 'data':
+
+Doc ID   : f407941e-0139-472b-aea3-7b00f0ec458f
+File Name: compliance_policy.md
+File Size: 501 bytes
+ ## Section 1: Customer Data Isolat...etention Policy
+--------------------------------------------------
+Doc ID   : 6d62219d-c5a0-4eb3-a17f-a70c1d18c99f
+File Name: system_architecture.txt
+File Size: 385 bytes
+Snippet  : The Core Banking System (CBS) processes real-time ledger updates across 500 bran...
+--------------------------------------------------
+
+======================================================================
+  PART 2: MANUAL DOCUMENT & METADATA MASKING
+======================================================================
+--- [1] Raw Underlying Content (metadata_mode='all') ---
+service: payments-backend
+environment: production
+db_secret_arn: arn:aws:secretsmanager:us-east-1:123456789:secret:pg_cred
+compliance_tier: PCI-DSS-Level-1
+
+PostgreSQL Connection Pool Settings: Max connections = 100. Idle timeout = 300s. Connection string uses SSL verify-full. Failover replica is located in us-east-1b.
+
+--- [2] Prompt Content Fed to LLM (metadata_mode='llm') ---
+service: payments-backend
+environment: production
+compliance_tier: PCI-DSS-Level-1
+
+PostgreSQL Connection Pool Settings: Max connections = 100. Idle timeout = 300s. Connection string uses SSL verify-full. Failover replica is located in us-east-1b.
+
+--- [3] Content Embedded by Vector Model (metadata_mode='embed') ---
+service: payments-backend
+compliance_tier: PCI-DSS-Level-1
+
+PostgreSQL Connection Pool Settings: Max connections = 100. Idle timeout = 300s. Connection string uses SSL verify-full. Failover replica is located in us-east-1b.
+
+======================================================================
+  PART 3: CHUNKING INTO TextNode OBJECTS
+======================================================================
+Generated 4 TextNode(s) from 3 Document(s).
+
+======================================================================
+  PART 4: NODE GRAPH RELATIONSHIPS (SOURCE, PREV, NEXT)
+======================================================================
+
+[Node 0] ID: 26b47838-fc02-4ae1-b5a4-e3226e129664
+Text Snippet: PostgreSQL Connection Pool Settings: Max connections = 100. Idle ...       
+   * Parent Doc (SOURCE)   : d90afec2-6571-479b-be11-6437a0424eb6
+   * Previous Node (PREV) : None (Start of Document)
+   * Next Node (NEXT)     : None (End of Document)
+   * Inherited Metadata    : ['service', 'environment', 'db_secret_arn', 'compliance_tier']
+
+[Node 1] ID: 483ea820-2a4a-48d9-8f78-72ab496ada74
+ ## Section 1: Custo...ise Compliance & Retention Policy
+   * Parent Doc (SOURCE)   : f407941e-0139-472b-aea3-7b00f0ec458f
+   * Previous Node (PREV) : None (Start of Document)
+   * Next Node (NEXT)     : 4286fdda-5fc9-4578-9916-2cd26e9f0841
+   * Inherited Metadata    : ['file_path', 'file_name', 'file_size', 'creation_date', 'last_modified_date']
+
+[Node 2] ID: 4286fdda-5fc9-4578-9916-2cd26e9f0841
+Text Snippet: Multi-tenant databases must enforce tenant ID row-level security ...       
+   * Parent Doc (SOURCE)   : f407941e-0139-472b-aea3-7b00f0ec458f
+   * Previous Node (PREV) : 483ea820-2a4a-48d9-8f78-72ab496ada74
+   * Next Node (NEXT)     : None (End of Document)
+   * Inherited Metadata    : ['file_path', 'file_name', 'file_size', 'creation_date', 'last_modified_date']
+
+[Node 3] ID: ffbeb9a4-188b-424d-a593-42d29cbfd947
+Text Snippet: The Core Banking System (CBS) processes real-time ledger updates ...       
+   * Parent Doc (SOURCE)   : 6d62219d-c5a0-4eb3-a17f-a70c1d18c99f
+   * Previous Node (PREV) : None (Start of Document)
+   * Next Node (NEXT)     : None (End of Document)
+   * Inherited Metadata    : ['file_path', 'file_name', 'file_type', 'file_size', 'creation_date', 'last_modified_date']
+
