@@ -1,0 +1,84 @@
+
+======================================================================
+  PART 1: INITIALIZING GROQ & EMBEDDINGS
+======================================================================
+Loading weights: 100%|██████████████████████████████| 103/103 [00:00<00:00, 2533.85it/s]
+Groq ('openai/gpt-oss-20b') and Hugging Face Embeddings ready.
+
+======================================================================
+  PART 2: ISOLATED DOCUMENT INDICES
+======================================================================
+Compliance Index built.
+Architecture Index built.
+
+======================================================================
+  PART 3: SUB-QUESTION DECOMPOSITION PIPELINE
+======================================================================
+
+Target Multi-Hop Query:
+"Compare our Disaster Recovery RPO/RTO requirements in the compliance policy with how the Core Banking System (CBS) guarantees data integrity."
+
+2026-10-22 18:14:23,515 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+Generated 4 sub questions.
+
+[compliance_engine] Q: What are the RPO and RTO requirements specified in the compliance policy?
+[architecture_engine] Q: What data integrity guarantees does the Core Banking System (CBS) provide?
+[architecture_engine] Q: What disaster recovery mechanisms and procedures are implemented in the CBS?
+[architecture_engine] Q: What are the RPO and RTO values defined for the CBS?
+
+2026-10-22 18:14:24,311 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+
+[compliance_engine] A: The policy requires a Recovery Point Objective (RPO) of 0 seconds for financial ledger data, and a Recovery Time Objective (RTO) of less than 60 seconds for mission‑critical payment services.
+
+2026-10-22 18:14:24,491 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+
+[architecture_engine] A: The provided context does not specify any RPO or RTO values for the CBS.
+
+2026-10-22 18:14:25,176 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+
+[architecture_engine] A: The CBS relies on a combination of data‑replication, transaction‑consistency protocols, and immutable audit storage to recover from outages or data loss:
+
+* **Distributed ledger storage** – Ledger updates are written to a Cassandra cluster that spans the 500 branches. The cluster’s replication factor and cross‑region nodes keep copies of every mutation, so if one node or data center fails, the system can continue to serve requests from the remaining replicas.
+
+* **Event‑driven ingestion** – High‑frequency transactions flow through Kafka event streams. Kafka’s built‑in replication and partitioning guarantee that messages are not lost if a broker goes down, allowing the system to replay or re‑process events once the broker is back online.
+
+* **Two‑phase commit validation** – Every ledger mutation is validated with a two‑phase commit. This ensures that all replicas reach a consistent state before the transaction is finalized, preventing double‑spending and making roll‑back or replay straightforward in the event of a failure.
+
+* **Immutable audit trail** – Audit logs are asynchronously written to S3 buckets that have Object Lock enabled for seven years. The immutable nature of these logs protects against tampering and provides a reliable source of truth that can be used to reconstruct the state of the ledger if needed.
+
+Together, these mechanisms provide a robust disaster‑recovery framework that preserves data integrity, ensures continuity of service, and maintains a tamper‑proof audit trail.   
+
+2026-10-22 18:14:25,178 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+
+[architecture_engine] A: The Core Banking System guarantees that every ledger mutation is validated through a two‑phase commit process, ensuring atomicity and preventing double‑spending. Additionally, all audit logs are written to immutable S3 buckets with Object Lock, protecting them from alteration for a 7‑year retention period.
+
+2026-10-22 18:14:27,182 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+
+--- Groq Synthesized Comparative Answer ---
+The compliance policy sets a very tight recovery window: a 0‑second RPO for all financial ledger data and an RTO of less than 60 seconds for mission‑critical payment services.   
+The Core Banking System’s architecture is built to meet those expectations through a combination of data‑integrity guarantees:
+
+* **Atomic ledger updates** – Every mutation is processed with a two‑phase commit, ensuring that all replicas reach a consistent state before the transaction is finalized. This eliminates the risk of partial writes and guarantees that no data is lost between the point of mutation and the point of persistence, effectively supporting a 0‑second RPO.       
+
+* **Distributed, cross‑region replication** – Ledger changes are written to a Cassandra cluster that spans 500 branches, with a replication factor that keeps copies in multiple data centers. If a node or an entire region fails, the system can continue to serve requests from remaining replicas, allowing the service to stay online and recover within the 60‑second RTO window.
+
+* **Event‑driven resilience** – High‑frequency transactions flow through Kafka streams that replicate and partition messages. If a broker goes down, the messages are preserved and can be replayed once the broker is back online, ensuring that no transaction is lost and that recovery can happen quickly.
+
+* **Immutable audit trail** – Audit logs are written asynchronously to S3 buckets with Object Lock for seven years. The tamper‑proof nature of these logs provides a reliable source of truth that can be used to reconstruct the ledger state if needed, supporting both data integrity and rapid recovery.
+
+Together, these mechanisms give the CBS a robust foundation for meeting the compliance policy’s RPO and RTO targets. While the CBS itself does not publish explicit RPO/RTO figures, its data‑integrity guarantees—atomic commits, cross‑region replication, resilient event ingestion, and immutable audit logs—are designed to keep ledger data current and recoverable within the zero‑second RPO and sub‑60‑second RTO specified by the policy.
+----------------------------------------------------------------------
+
+======================================================================
+  PART 4: HyDE QUERY TRANSFORMATION
+======================================================================
+Abstract User Query: "How do we prevent financial double-spending anomalies?"
+(Notice: 'double-spending' does not appear in simple questions, but HyDE bridges it!)    
+
+2026-10-22 18:14:30,264 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-10-22 18:14:31,033 - INFO - HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+
+--- HyDE Final Answer ---
+Double‑spending is avoided by enforcing a two‑phase commit (2PC) protocol for every ledger mutation. Each transaction is first prepared and locked, then committed only after all involved nodes confirm the change, ensuring that no duplicate spend can be recorded.     
+----------------------------------------------------------------------
+Source Node Matched: system_architecture.txt

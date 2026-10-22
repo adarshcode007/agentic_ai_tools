@@ -69,7 +69,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
   - `VectorStoreIndex`: Creating, persisting, and querying dense vector indices.
   - `SummaryIndex` and `KeywordTableIndex`: When and how to pair them with vector stores.
   - Connecting LlamaIndex to external storage backends (Qdrant, Pinecone, Chroma).
-- [ ] **Advanced Retrieval & Query Engines**:
+- [x] **Advanced Retrieval & Query Engines**:
   - `RouterQueryEngine`: Dynamically routing queries between a summary engine and a vector search engine.
   - `SubQuestionQueryEngine`: Decomposing multi-step questions into sub-queries across different documents.
   - HyDE (Hypothetical Document Embeddings) Query Transform (`HyDEQueryTransform`).

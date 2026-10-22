@@ -649,6 +649,23 @@ LlamaIndex automatically maintains graph pointers on every `TextNode`:
 
 ---
 
+### 4. Why Use LlamaIndex on Top of Vector Stores (Chroma / Pinecone)?
+
+A common architectural dilemma: *"If ChromaDB or Pinecone already stores vectors and computes cosine similarity, why add LlamaIndex on top?"*
+
+* **The Core Distinction: Storage Engine vs. Application Framework:**
+  - **ChromaDB / Pinecone = The Storage Engine (like PostgreSQL):**
+    Responsible solely for persisting float vectors, executing hardware-accelerated HNSW index search, and returning top-k matching vector IDs. It has zero native understanding of document structures, token budgets, or LLM prompt formatting.
+  - **LlamaIndex = The Data & Query Intelligence Layer (like Django / SQLAlchemy ORM):**
+    Handles multi-format document parsing (PDFs, Markdown, HTML), hierarchical node chunking, graph relationships (`NodeRelationship`), metadata masking, and LLM synthesis.
+* **Key Capabilities LlamaIndex Adds Over Raw Vector Stores:**
+  1. **Document Ingestion & Node Topologies:** Raw vector DBs store isolated floating vectors. LlamaIndex preserves bidirectional lineage (`PARENT`, `CHILD`, `PREVIOUS`, `NEXT`), unlocking Sentence Window Retrieval without extra database calls.
+  2. **Query Intelligence & Decomposition:** Raw vector databases run a single blunt search. LlamaIndex provides `SubQuestionQueryEngine` (breaking complex multi-part questions into N targeted sub-queries) and `HyDE` (generating hypothetical answers to bridge vocabulary mismatches).
+  3. **Dynamic Routing (`RouterQueryEngine`):** Automatically classifies user queries to route specific fact searches to vector stores and holistic questions to summary indices.
+  4. **Post-Retrieval Processing & Re-ranking:** Evaluates candidate chunks with cross-encoder re-rankers (`SentenceTransformerRerank`) to eliminate semantic false positives before calling the LLM.
+
+---
+
 ## 15. LlamaIndex Index Architectures, StorageContext & External Vector DBs
 
 ### 1. The Two Fundamental Indices
@@ -708,6 +725,62 @@ index = VectorStoreIndex.from_documents(documents, storage_context=storage_conte
   1. **Native HNSW Offloading:** Similarity searches run inside Chroma's C++ HNSW graph engine instead of unoptimized Python loops.
   2. **Metadata Co-location:** Text chunks and attributes are stored directly in Chroma's metadata tables (`_node_content`, `file_name`).
   3. **Process Independence:** Multiple application workers can query the same ChromaDB collection concurrently without holding in-memory Python state.
+
+---
+
+## 16. Advanced Query Engines: Routing, Multi-Hop Decomposition & HyDE
+
+### 1. Multi-Hop Query Decomposition (`SubQuestionQueryEngine`)
+
+* **The Problem (The "Blended Soup" & Domain Starvation):**
+  When multiple distinct documents (e.g. Compliance Policy vs. Core Banking Architecture) are merged into a single vector store, complex comparative queries fail. Keywords from one domain dominate the cosine similarity calculation, completely starving the second domain from appearing in the top-k results.
+* **The Solution Architecture:**
+  1. **Isolated Sub-Indices:** Each document domain is maintained in its own dedicated index wrapped as a `QueryEngineTool`.
+  2. **Question Generator (`LLMQuestionGenerator`):** An LLM acts as an execution planner, breaking 1 complex user question into N targeted sub-questions tagged to specific tools.
+  3. **Parallel Execution & Map-Reduce Synthesis:** Sub-queries execute concurrently against their respective indices. The intermediate answers are gathered and fed into a response synthesizer to generate a unified comparative report.
+* **Production Gotcha (Tool Call Validation):**
+  - Default `OpenAIQuestionGenerator` forces OpenAI function-calling JSON schemas (`items: [{tool_name, sub_question}]`). Open-weights models often generate flat string arrays (`items: ["tool: query"]`), causing `400 Bad Request` schema validation failures on strict gateways like Groq.
+  - **Fix:** Use `LLMQuestionGenerator.from_defaults(llm=Settings.llm)` which uses robust prompt-and-output parsing (`SubQuestionOutputParser`) compatible across all model families.
+
+---
+
+### 2. Hypothetical Document Embeddings (`HyDEQueryTransform`)
+
+* **The Problem (The Vocabulary Mismatch Gap):**
+  Natural language queries often lack the technical terminology found in source documentation.
+  - *User Query:* "How do we prevent financial double-spending anomalies?"
+  - *Source Document Text:* "All ledger mutations require two-phase commit validation."
+  - *Result:* Weak cosine similarity because the query and document share zero common words.
+* **How HyDE Solves It:**
+  ```
+  [User Query: "Prevent double-spending?"]
+                    │
+                    ▼
+  [LLM generates Hypothetical Answer: "Double-spending is prevented via two-phase commit..."]
+                    │
+                    ▼
+  [Embedding Model vectorizes the Hypothetical Answer]
+                    │
+                    ▼
+  [Vector Search matches actual source document: "two-phase commit validation"]
+  ```
+  1. An LLM hallucinates a plausible, technical passage that *could* answer the user's question.
+  2. `HyDEQueryTransform` embeds this **hypothetical passage** instead of the raw user query.
+  3. Because the hypothetical passage contains domain terminology ("two-phase commit", "ledger replication"), its embedding vector lands directly adjacent to the true document in vector space.
+
+---
+
+### 3. Dynamic Intent Routing (`RouterQueryEngine`) & Two-Stage Re-ranking
+
+* **Semantic Tool Descriptions:**
+  The router does not search document text; it routes solely based on `QueryEngineTool(description=...)`. Vague descriptions cause random routing or hallucinated tool calls.
+* **Single vs. Multi-Selector:**
+  - `LLMSingleSelector`: Enforces exactly one tool choice. Fast and deterministic for simple queries, but drops intents on compound queries.
+  - `LLMMultiSelector`: Allows the model to output multiple tool selections for multi-faceted requests, executing both and merging results.
+* **Two-Stage Re-ranking Pipeline:**
+  - *Stage 1 (Bi-Encoder Over-fetch):* Fast Approximate Nearest Neighbor vector search pulls top-5 to top-10 candidate chunks.
+  - *Stage 2 (Cross-Encoder Re-rank):* `SentenceTransformerRerank` (`ms-marco-MiniLM-L-6-v2`) performs full token-to-token cross-attention between query and candidate text, filtering out false positives before sending top-2 chunks to the LLM.
+
 
 
 
