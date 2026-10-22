@@ -781,6 +781,143 @@ index = VectorStoreIndex.from_documents(documents, storage_context=storage_conte
   - *Stage 1 (Bi-Encoder Over-fetch):* Fast Approximate Nearest Neighbor vector search pulls top-5 to top-10 candidate chunks.
   - *Stage 2 (Cross-Encoder Re-rank):* `SentenceTransformerRerank` (`ms-marco-MiniLM-L-6-v2`) performs full token-to-token cross-attention between query and candidate text, filtering out false positives before sending top-2 chunks to the LLM.
 
+---
+
+## 17. LlamaIndex Workflows & Event-Driven Agentic RAG
+
+### 1. The Paradigm Shift: Why Event-Driven Workflows?
+
+* **Limitations of Legacy Chains & ReAct Loops:**
+  - Linear Pipelines (`QueryEngine`, DAG chains) assume deterministic, one-way data flow. They cannot model cyclical decision loops, self-correction, or dynamic branching gracefully.
+  - ReAct Agents rely on prompt-bound tool invocation in a loose while-loop. They are non-deterministic, hard to test, vulnerable to hallucinations, and lack fine-grained state checkpoints.
+* **The Workflow Solution:**
+  LlamaIndex Workflows represent an **asynchronous, event-driven state machine**. Steps are isolated Python functions connected by typed event payloads rather than direct function calls or prompt steering.
+
+```
+       ┌────────────────┐
+       │   StartEvent   │
+       └───────┬────────┘
+               │
+               ▼
+       ┌────────────────┐
+       │ @step: retrieve│
+       └───────┬────────┘
+               │
+      Quality Score Threshold?
+      ├── Score < 0.20 ──────▶ [RewriteQueryEvent] ──▶ [@step: rewrite_query] ──┐
+      │                                                                         │ (Loop back)
+      └── Score >= 0.20 ─────▶ [RerankEvent]                                    │
+                                     │                                          │
+                                     ▼                                          │
+                             [@step: rerank] ◀──────────────────────────────────┘
+                                     │
+                                     ▼
+                            [SynthesizeEvent]
+                                     │
+                                     ▼
+                            [@step: synthesize]
+                                     │
+                                     ▼
+                                [StopEvent]
+```
+
+---
+
+### 2. The Core Primitives
+
+1. **`Workflow` Base Class:**
+   - Inherited by custom workflows (`class CorrectiveRAGWorkflow(Workflow)`).
+   - Manages the asynchronous event loop, step dispatching, step timeout bounds, and lifecycle management.
+2. **`@step` Decorator:**
+   - Marks methods as executable workflow steps.
+   - Requires explicit Python type hints on arguments and return values.
+3. **`Event` Data Classes:**
+   - Subclassed from `llama_index.core.workflow.Event`.
+   - Act as strongly typed payloads carrying intermediate state between steps (e.g. queries, retrieved nodes, metadata).
+4. **`StartEvent` & `StopEvent`:**
+   - `StartEvent`: Dispatched when calling `await workflow.run(param="value")`. Carries initial input accessible via `ev.get("param")` or `ev.param`.
+   - `StopEvent`: Terminal event. Emitting `return StopEvent(result=...)` halts the workflow and delivers `result` as the output of `workflow.run()`.
+5. **`Context` (`ctx`):**
+   - Injected into any `@step` by adding `ctx: Context` to its signature.
+   - Provides shared cross-step memory (`await ctx.set("key", val)`, `await ctx.get("key")`).
+   - Enables fan-in synchronization barriers (`await ctx.collect_events(ev, [EventA, EventB])`).
+
+---
+
+### 3. Under the Hood: The Event Bus & Execution Engine
+
+1. **Metaclass Type Reflection & Dynamic Route Registry:**
+   - At class definition time, LlamaIndex reflects on the type hints of all methods decorated with `@step`.
+   - It builds an internal routing table mapping event types to handler methods:
+     ```
+     Event Registry = {
+         StartEvent:        [self.retrieve],
+         RewriteQueryEvent: [self.rewrite_query],
+         RerankEvent:       [self.rerank],
+         SynthesizeEvent:   [self.synthesize]
+     }
+     ```
+   - *Rule:* If type hints are omitted or incorrectly typed, the workflow will fail to route events at runtime.
+
+2. **The Asynchronous Event Queue (`asyncio.Queue`):**
+   - Calling `await workflow.run(...)` initializes an internal event queue and enqueues `StartEvent`.
+   - The workflow runner enters an asynchronous polling loop:
+     1. Dequeues an event `ev`.
+     2. Looks up all registered step handlers for `type(ev)`.
+     3. Schedules step handler coroutines concurrently using `asyncio.create_task` or `asyncio.gather`.
+     4. Collects returned events and enqueues them back onto the bus.
+     5. If a step returns `StopEvent`, the loop terminates and unblocks `workflow.run()`.
+
+3. **Fan-Out (Parallel Execution):**
+   - If multiple steps subscribe to the same event type:
+     ```python
+     @step
+     async def step_a(self, ev: DataReadyEvent) -> SummaryAEvent: ...
+     @step
+     async def step_b(self, ev: DataReadyEvent) -> SummaryBEvent: ...
+     ```
+   - When `DataReadyEvent` is emitted, the workflow engine automatically fires both steps concurrently in non-blocking tasks.
+
+4. **Fan-In (Barrier Synchronization via `ctx.collect_events`):**
+   - When a downstream step requires outputs from multiple independent upstream branches:
+     ```python
+     @step
+     async def merge_step(self, ctx: Context, ev: SummaryAEvent | SummaryBEvent) -> FinalEvent:
+         ready = ctx.collect_events(ev, [SummaryAEvent, SummaryBEvent])
+         if not ready:
+             return None  # Wait for remaining events to arrive at the barrier
+         ev_a, ev_b = ready
+         # Process merged outputs...
+     ```
+   - `collect_events` stores incoming events in the run context until all required event types have arrived, preventing race conditions.
+
+---
+
+### 4. Decision Strategy Patterns in Workflows
+
+* **Dynamic Conditional Branching (Union Return Types):**
+  Instead of hardcoded if/else call stacks, a step inspects runtime data quality and returns distinct event types (`-> EventA | EventB`).
+  ```python
+  @step
+  async def validate_nodes(self, ev: RetrievedNodesEvent) -> HighQualityEvent | RetryQueryEvent:
+      if ev.nodes[0].score >= 0.20:
+          return HighQualityEvent(nodes=ev.nodes)
+      return RetryQueryEvent(query=ev.query)
+  ```
+* **Cyclical Corrective Loops (CRAG):**
+  A step can emit `StartEvent` or an upstream event type to re-execute previous steps with modified inputs (e.g. query rewriting or web search fallback).
+* **Production Guardrails:**
+  1. **Infinite Loop Prevention:** Always track iteration counts in `ctx` to break cyclic loops:
+     ```python
+     retries = await ctx.get("retries", default=0)
+     if retries >= MAX_RETRIES:
+         return StopEvent(result="Fallback response after max retries reached.")
+     await ctx.set("retries", retries + 1)
+     ```
+  2. **Global Timeout Budgets:** Pass `Workflow(timeout=60.0)` to ensure stuck steps or hung external API calls do not consume server workers indefinitely.
+  3. **Strict Schema Contracts:** Keep all events typed with Pydantic attributes. Avoid passing unvalidated generic dictionaries between steps.
+
+
 
 
 

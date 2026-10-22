@@ -6,10 +6,10 @@ Having already mastered the fundamentals **from first principles (scratch)** in 
 
 ---
 
-## 📍 Current Status: `Phase 0 Complete ✅ ──▶ Phase 1 Complete ✅ ──▶ Phase 2 (LlamaIndex — The Production RAG Standard) 🟡` — In Progress 🚀
+## 📍 Current Status: `Phase 0 Complete ✅ ──▶ Phase 1 Complete ✅ ──▶ Phase 2 Complete ✅ ──▶ Phase 3 (LangChain & LangGraph — State Machines & Multi-Agent Orchestration) 🟡` — Ready to Start 🚀
 
 ```
-[✅ Phase 0] ──▶ [✅ Phase 1] ──▶ [🟡 Phase 2] ──▶ [⚪ Phase 3] ──▶ [⚪ Phase 4] ──▶ [⚪ Phase 5]
+[✅ Phase 0] ──▶ [✅ Phase 1] ──▶ [✅ Phase 2] ──▶ [🟡 Phase 3] ──▶ [⚪ Phase 4] ──▶ [⚪ Phase 5]
 Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider APIs    Production
 (FAISS/Qdrant/    (Transformers/   (RAG/Query       (Agents/State    (OpenAI/Claude/  Capstone
  Pinecone/Chroma)  Embeddings)      Engines)         Machines)        LiteLLM)         Portfolio
@@ -59,7 +59,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 
 ---
 
-### Phase 2: LlamaIndex — The Production RAG Standard (IN PROGRESS 🟡)
+### Phase 2: LlamaIndex — The Production RAG Standard (COMPLETED ✅)
 *Mastering the data framework designed specifically for advanced indexing, document intelligence, and retrieval.*
 
 - [x] **Data Ingestion & Document Abstraction**:
@@ -74,7 +74,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
   - `SubQuestionQueryEngine`: Decomposing multi-step questions into sub-queries across different documents.
   - HyDE (Hypothetical Document Embeddings) Query Transform (`HyDEQueryTransform`).
   - Node Postprocessors: Injecting `SentenceTransformerRerank` and similarity cutoffs.
-- [ ] **LlamaIndex Workflows & Agentic RAG**:
+- [x] **LlamaIndex Workflows & Agentic RAG**:
   - Event-driven RAG workflows using the new LlamaIndex Workflows engine.
 
 ---
