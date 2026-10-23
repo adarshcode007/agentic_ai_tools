@@ -1,0 +1,69 @@
+======================================================================
+  PART 1: THE RUNNABLE PROTOCOL (PROMPT | MODEL | PARSER)
+======================================================================
+
+[1. Testing .invoke()]
+Result:
+A Two‑Phase Commit (2PC) is a distributed transaction protocol in which a coordinator first asks all participating nodes to prepare (phase 1) and, only if every node votes “commit,” then instructs them to finalize the transaction (phase 2), ensuring atomic commit or abort across the system.
+
+[2. Testing .stream() - Token-by-Token Streaming]
+Streamed: - **Sybil attacks** – an adversary creates many pseudo‑identities to gain disproportionate influence over consensus, potentially manipulating transaction ordering or block validation.
+- **51 % (majority) attacks** – control of > 50 % of the network’s hashing or staking power enables double‑spending, chain reorganization, and censorship of legitimate transactions.
+- **Smart‑contract vulnerabilities** – bugs or logic flaws (e.g., re‑entrancy, integer overflow, unchecked external calls) allow attackers to exfiltrate assets or alter ledger state despite the underlying distributed consensus.
+
+[3. Testing .batch() - Concurrent Execution]
+  * Q: What does RPO stand for in disaster recovery?
+    A: **RPO = Recovery Point Objective**  
+
+In disaster‑recovery planning, RPO defines the maximum acceptable amount of data loss measured as the time interval between the last successful backup (or replication point) and the onset of a disruption. It answers the question: *How far back in time can we afford to restore data without unacceptable impact?*  
+
+Typical expression: “Our RPO is 4 hours,” meaning backups must be taken at least every 4 hours to stay within the tolerated data‑loss window. (Related metric: **RTO** – Recovery Time Objective, the maximum allowable downtime.)
+
+  * Q: What does RTO stand for in disaster recovery?
+    A: RTO stands for **Recovery Time Objective**. It defines the maximum acceptable duration between a service disruption and the restoration of that service to an operational state. In disaster recovery planning, RTO guides the design of backup, failover, and restoration processes to ensure systems are back online within the stipulated time frame.
+
+[4. Testing .ainvoke() - Asynchronous Call]
+Async Result: An API where repeated identical requests produce the same effect as a single request, leaving system state unchanged after the first call.
+
+======================================================================
+  PART 2: TOOL BINDING & FUNCTION CALLING (.bind_tools)
+======================================================================
+
+User Query: "Please calculate the VAT for a purchase of 4500 EUR in Germany (DE)."       
+
+[Inspecting Model Output]
+Model Content Text: ''
+Detected Tool Calls Count: 1
+
+  --- Tool Call 1 ---
+  Name: calculate_vat
+  Arguments: {'amount': 4500, 'country_code': 'DE'}
+  Tool Call ID: fc_e2cf9100-d9a0-420a-9e05-f727e3e19c1b
+
+======================================================================
+  PART 3: TOOL EXECUTION & CONVERSATION SYNTHESIS
+======================================================================
+
+[Executing Tool 'calculate_vat' with args: {'amount': 4500, 'country_code': 'DE'}]       
+  Raw Tool Output: Country: DE | Base: 4500.0 | Tax Rate: 19% | Tax: 855.0 | Total: 5355.0
+
+[Synthesizing Final Response with Model...]
+
+Final Synthesized Answer:
+The VAT for a €4,500 purchase in Germany (19 % rate) is **€855**, making the total amount **€5,355**.
+
+======================================================================
+  PART 4: SECOND TOOL TEST (LEDGER AUDIT)
+======================================================================
+
+User Query: "Audit the ledger transactions for account ACC-9021. Check the last 2 records."
+Generated Tool Calls: [{'name': 'audit_bank_ledger', 'args': {'account_id': 'ACC-9021', 'limit': 2}, 'id': 'fc_2cd44554-aaba-4126-b905-e98dd4b459da', 'type': 'tool_call'}]       
+
+Final Audit Report:
+**Ledger Audit Summary for Account ACC‑9021 (last 2 transactions)**
+
+- **Integrity Check:** **PASSED**
+- **Anomalies Detected:** None (zero double‑spend anomalies)
+
+The two most recent entries appear clean and compliant. Let me know if you’d like to review additional records, dive deeper into specific transactions, or need anything else!
+

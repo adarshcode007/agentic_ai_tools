@@ -79,10 +79,10 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
 
 ---
 
-### Phase 3: LangChain & LangGraph — State Machines & Multi-Agent Orchestration (NOT STARTED ⚪)
+### Phase 3: LangChain & LangGraph — State Machines & Multi-Agent Orchestration (IN PROGRESS 🟡)
 *Mastering the industry standard for stateful, cyclic multi-agent graphs and enterprise orchestration.*
 
-- [ ] **Modern LangChain Core & LCEL (LangChain Expression Language)**:
+- [x] **Modern LangChain Core & LCEL (LangChain Expression Language)**:
   - Building pipelines with `ChatPromptTemplate | ChatModel | OutputParser`.
   - Streaming, batching, and async execution (`ainvoke`, `astream`, `abatch`).
   - LangChain dynamic tool definitions using `@tool` decorator with Pydantic schemas.
