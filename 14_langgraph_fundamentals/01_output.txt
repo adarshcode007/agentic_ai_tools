@@ -1,0 +1,63 @@
+
+======================================================================
+  TEST 1: DIRECT QUERY (NO TOOLS NEEDED)
+======================================================================
+User Query: "Explain the difference between fiat currency and central bank digital currency (CBDC) in one sentence."
+
+  [AGENT NODE] Reasoning over conversation state...
+  [ROUTER] No tool calls detected -> Routing to END.
+
+Final Response:
+Fiat currency is physical or electronic money issued by a government that relies on legal tender status and trust in the issuing authority, whereas a central bank digital currency (CBDC) is a digital form of that same sovereign money, directly created, recorded, and settled on a central‑bank‑operated platform rather than through commercial banks.
+
+======================================================================
+  TEST 2: MULTI-STEP AGENTIC CYCLE (2 TOOLS IN SEQUENCE)
+======================================================================
+User Query: "What is the balance of account ACC-1001, and how much is that in EUR?"
+
+--- Streaming Graph Node Executions ---
+
+  [AGENT NODE] Reasoning over conversation state...
+  [ROUTER] Detected 1 tool call(s) -> Routing to 'tools' node.
+
+[Step 1] Node 'agent' executed.
+  * Requested Tool: get_account_balance({'account_id': 'ACC-1001'})
+
+[Step 2] Node 'tools' executed.
+  * Message Content: Account ACC-1001: Cleared Balance = 15400.5 USD...
+
+  [AGENT NODE] Reasoning over conversation state...
+  [ROUTER] Detected 1 tool call(s) -> Routing to 'tools' node.
+ency': 'EUR'})
+
+[Step 4] Node 'tools' executed.
+  * Message Content: 15400.5 USD = 14168.46 EUR (Spot Rate: 0.92)...
+
+  [AGENT NODE] Reasoning over conversation state...
+  [ROUTER] No tool calls detected -> Routing to END.
+
+[Step 5] Node 'agent' executed.
+  * Message Content: **Account Balance**
+
+- **Account:** ACC-1001
+- **Cleared Balance:** **15,400.5 USD**
+
+**Converted to EUR**
+
+- **Amount:** **14,168.46 EUR** (using...
+
+  [AGENT NODE] Reasoning over conversation state...
+  [ROUTER] Detected 1 tool call(s) -> Routing to 'tools' node.
+
+  [AGENT NODE] Reasoning over conversation state...
+  [ROUTER] Detected 1 tool call(s) -> Routing to 'tools' node.
+
+  [AGENT NODE] Reasoning over conversation state...
+  [ROUTER] No tool calls detected -> Routing to END.
+
+--- Final Synthesized Response ---
+**Account Balance**
+
+- **Account:** ACC-1001  
+- **Cleared Balance:** **15,400.5 USD**  
+- **Equivalent in EUR:** **≈ 14,168.46 EUR** (using a spot rate of 0.92 USD → EUR)  

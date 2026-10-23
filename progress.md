@@ -86,7 +86,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
   - Building pipelines with `ChatPromptTemplate | ChatModel | OutputParser`.
   - Streaming, batching, and async execution (`ainvoke`, `astream`, `abatch`).
   - LangChain dynamic tool definitions using `@tool` decorator with Pydantic schemas.
-- [ ] **LangGraph Fundamentals**:
+- [x] **LangGraph Fundamentals**:
   - Why LangGraph replaces rigid DAG chains: cyclic execution loops, conditional routing, and state persistence.
   - Defining typed schemas with `TypedDict` and `Annotated` reducers.
   - Building nodes (workers), edges, and conditional edges (`add_conditional_edges`).
