@@ -90,7 +90,7 @@ Vector Stores     Hugging Face     LlamaIndex       LangGraph        Provider AP
   - Why LangGraph replaces rigid DAG chains: cyclic execution loops, conditional routing, and state persistence.
   - Defining typed schemas with `TypedDict` and `Annotated` reducers.
   - Building nodes (workers), edges, and conditional edges (`add_conditional_edges`).
-- [ ] **Stateful Persistence & Human-in-the-Loop (HITL)**:
+- [x] **Stateful Persistence & Human-in-the-Loop (HITL)**:
   - Checkpointing states with `MemorySaver` / SQLite checkpointers to support time travel and rollback.
   - Implementing interrupt gates (`interrupt()`) for human approval before critical tool execution.
 - [ ] **Multi-Agent Systems with LangGraph**:
