@@ -1264,6 +1264,132 @@ Autonomous agents must not execute irreversible, high-stakes actions (financial 
    - When `app.invoke(None, config=config)` is subsequently called, LangGraph **skips the physical tool execution entirely**, following the static edge `tools -> agent`.
    - The agent reads the rejection message and politely explains the outcome to the user.
 
+---
+
+## 22. Multi-Agent Systems in LangGraph: The Supervisor-Worker Pattern
+
+### 1. Architectural Topologies: Single-Agent vs. Supervisor vs. Swarm
+
+As agentic tasks grow in complexity, single-agent architectures suffer from **tool cognitive overload** and **context degradation**. Splitting capabilities into multi-agent systems resolves this.
+
+* **Topological Archetypes:**
+  1. **Hierarchical (Supervisor-Worker):**
+     A central router (Supervisor) coordinates a team of isolated specialists. Workers never communicate directly with each other; every handoff routes back to the Supervisor. Best for deterministic workflows, governance, and auditability.
+  2. **Peer-to-Peer (Swarm / Handoff):**
+     Agents transfer control directly to one another using handoff functions (`transfer_to_support()`). Best for dynamic customer service triaging, but harder to constrain deterministically.
+  3. **Sequential Pipeline:**
+     Static linear pipeline (`Agent A -> Agent B -> Agent C`). Lacks dynamic branching or cyclic refinement.
+
+```
+                  ┌─────────────────────────────────────────┐
+                  │            SUPERVISOR AGENT             │
+                  │   (Structured Output Intent Router)     │
+                  └─────────────────────────────────────────┘
+                                   ▲    │
+              Handoff Back         │    │  Delegates Task
+              With Report          │    │
+                       ┌───────────┘    └───────────┐
+                       │                            │
+                       ▼                            ▼
+        ┌─────────────────────────────┐   ┌─────────────────────────────┐
+        │   MARKET RESEARCH WORKER    │   │  COMPLIANCE AUDIT WORKER    │
+        │ - search_market_data        │   │ - audit_regulatory_limits   │
+        │ - Internal ReAct Loop       │   │ - Internal ReAct Loop       │
+        └─────────────────────────────┘   └─────────────────────────────┘
+```
+
+---
+
+### 2. The Supervisor Node: Structured Routing Engine
+
+The Supervisor does not execute domain tools; its single objective is **Macro-Orchestration** (task decomposition and team coordination).
+
+* **Structured Output Schema:**
+  The supervisor enforces deterministic output using Pydantic:
+  ```python
+  class SupervisorDecision(BaseModel):
+      next_worker: Literal["researcher", "auditor", "FINISH"] = Field(
+          description="The next specialist to delegate to, or FINISH if answered."
+      )
+      reasoning: str = Field(description="Operational justification for the delegation.")
+  ```
+* **Binding Structured Output:**
+  ```python
+  supervisor_llm = llm.with_structured_output(SupervisorDecision)
+  decision = supervisor_llm.invoke([SystemMessage(content=SUPERVISOR_PROMPT)] + state["messages"])
+  return {"next_worker": decision.next_worker}
+  ```
+* **Dynamic Conditional Edge:**
+  ```python
+  builder.add_conditional_edges(
+      "supervisor",
+      lambda state: state["next_worker"],
+      {
+          "researcher": "researcher",
+          "auditor": "auditor",
+          "FINISH": END,
+      }
+  )
+  ```
+
+---
+
+### 3. Worker Encapsulation & Context Isolation
+
+In a multi-agent system, dumping raw tool outputs into the shared conversation state causes severe token bloat and attention degradation.
+
+* **Context Window Hygiene:**
+  - If a Market Researcher executes 3 database queries, the raw JSON payload might consume 15,000 tokens.
+  - If placed in shared state, the downstream Compliance Auditor must read 15,000 tokens of market ticks that are irrelevant to compliance rules.
+* **Encapsulated Worker Pattern:**
+  Workers run tools privately inside an internal execution loop. Only the synthesized final report is emitted to shared memory:
+  ```python
+  def worker_node(state: MultiAgentState):
+      # 1. Execute domain tools privately
+      tool_res = selected_tool.invoke(tc["args"])
+      # 2. Synthesize clean executive report
+      final_msg = worker_llm.invoke(...)
+      # 3. Emit ONLY the report to the shared channel
+      return {"messages": [AIMessage(content=f"[{worker_name} Report]:\n{final_msg.content}")]}
+  ```
+
+---
+
+### 4. Cyclic Routing & Terminating Invariants
+
+* **The Guaranteed Return Edge:**
+  Workers must **never** terminate the graph directly. They must unconditionally route back to the supervisor:
+  ```python
+  builder.add_edge("researcher", "supervisor")
+  builder.add_edge("auditor", "supervisor")
+  ```
+* **Preventing Infinite Worker Ping-Pong:**
+  1. The Supervisor prompt explicitly instructs the LLM: *"Once all required information has been gathered and reported -> output FINISH"*.
+  2. Workers tag their messages with clear identifiers (`[Researcher Report]`, `[Auditor Report]`) so the supervisor immediately recognizes what has already been completed.
+  3. LangGraph enforces a hard safety ceiling via `recursion_limit` in `config`.
+
+---
+
+### 5. Equivalence to LangGraph Compiled Subgraphs
+
+Writing an internal ReAct loop within `create_worker_node` is mathematically and architecturally equivalent to nesting a compiled LangGraph **Subgraph**:
+
+```python
+from langgraph.prebuilt import create_react_agent
+
+# Each worker is its own compiled micro-graph
+researcher_subgraph = create_react_agent(llm, tools=[search_market_data])
+auditor_subgraph = create_react_agent(llm, tools=[audit_regulatory_compliance])
+
+# Subgraphs added as standard nodes in the parent graph
+builder.add_node("researcher", researcher_subgraph)
+builder.add_node("auditor", auditor_subgraph)
+```
+In both designs:
+- The worker maintains its own private execution scratchpad.
+- The parent graph remains simple, readable, and decoupled.
+
+
 
 
 

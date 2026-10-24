@@ -1,0 +1,78 @@
+
+======================================================================
+  SCENARIO 1: RESEARCH DELEGATION
+======================================================================
+User Request: "What is the current market price and volatility for Bitcoin (BTC)?"       
+
+  [SUPERVISOR] Evaluating team progress and deciding next delegation...
+  [SUPERVISOR DECISION] Delegate to -> 'researcher' | Reason: User asks for current market price and volatility for Bitcoin, which requires market data research.
+  --> Step completed by node: 'supervisor'
+
+  [RESEARCHER WORKER] Activated. Analyzing task...
+  [RESEARCHER TOOL] Running search_market_data({'ticker': 'BTC'})
+  --> Step completed by node: 'researcher'
+
+  [SUPERVISOR] Evaluating team progress and deciding next delegation...
+  [SUPERVISOR DECISION] Delegate to -> 'researcher' | Reason: User requests current market price and volatility for Bitcoin, which requires market data research.
+  --> Step completed by node: 'supervisor'
+
+  [RESEARCHER WORKER] Activated. Analyzing task...
+  [RESEARCHER TOOL] Running search_market_data({'ticker': 'BTC'})
+  --> Step completed by node: 'researcher'
+
+  [SUPERVISOR] Evaluating team progress and deciding next delegation...
+  [SUPERVISOR DECISION] Delegate to -> 'FINISH' | Reason: The requested market price and volatility for Bitcoin have been provided.
+  --> Step completed by node: 'supervisor'
+
+======================================================================
+  SCENARIO 2: MULTI-AGENT COLLABORATION (RESEARCH -> AUDIT -> FINISH)
+======================================================================
+User Request: "We want to invest $75,000 into Bitcoin (BTC). First, fetch the current market data for BTC. Then, audit whether a $75,000 CRYPTO allocation complies with institutional banking limits."
+
+  [SUPERVISOR] Evaluating team progress and deciding next delegation...
+  [SUPERVISOR DECISION] Delegate to -> 'researcher' | Reason: We need current market data for Bitcoin (price, volatility, etc.) before we can audit compliance of a $75,000 allocation.
+
+  [RESEARCHER WORKER] Activated. Analyzing task...
+  [RESEARCHER TOOL] Running search_market_data({'ticker': 'BTC'})
+
+  [SUPERVISOR] Evaluating team progress and deciding next delegation...
+  [SUPERVISOR DECISION] Delegate to -> 'auditor' | Reason: We have fetched market data, now need to verify compliance of a $75,000 crypto allocation against institutional banking limits.
+
+  [AUDITOR WORKER] Activated. Analyzing task...
+  [AUDITOR TOOL] Running audit_regulatory_compliance({'allocation_amount': 75000, 'asset_class': 'CRYPTO'})
+
+  [SUPERVISOR] Evaluating team progress and deciding next delegation...
+  [SUPERVISOR DECISION] Delegate to -> 'FINISH' | Reason: Both market data for BTC and the compliance audit for the $75,000 crypto allocation have been provided. No further information is needed.
+
+======================================================================
+  FINAL COLLABORATIVE EXECUTIVE REPORT
+======================================================================
+
+[Researcher Report]:
+**Current Bitcoin (BTC) Market Data (as of the latest fetch)**
+- **Price:** $92,450 USD per BTC
+- **24‑hour Volatility:** 3.8 %
+- **Risk Category:** High
+
+*Note:* I’m unable to evaluate whether a $75,000 crypto allocation complies with institutional banking limits.
+--------------------------------------------------
+
+[Auditor Report]:
+**Current Bitcoin (BTC) Market Data (as of the latest available quote)**
+- **Price:** $92,450 USD per BTC
+- **24‑hour Volume:** ≈ $31 Billion
+- **24‑hour Volatility:** 3.8 %
+- **Risk Rating:** High (Crypto assets are classified as high‑risk under most institutional policies)
+
+**Regulatory Compliance Audit – $75,000 CRYPTO Allocation**
+
+| Item | Requirement | Result |
+|------|-------------|--------|
+| **Asset Class** | CRYPTO | Subject to the institutional crypto‑exposure cap |
+| **Maximum Allowed Crypto Exposure** | $50,000 per allocation (institutional banking limit) | **Exceeded** |
+| **Proposed Allocation** | $75,000 | **Violation** – $25,000 over the permitted limit | 
+
+**Conclusion:**
+The proposed $75,000 investment in Bitcoin **does not comply** with the institution’s regulatory limits for crypto exposure. To meet compliance, the allocation must be reduced to **$50,000 or less**, or re‑structured (e.g., split across multiple approved accounts, or moved into a permissible asset class such as Treasury or Equity within their respective limits).
+--------------------------------------------------
+
